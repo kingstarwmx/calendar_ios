@@ -243,6 +243,7 @@ NS_ASSUME_NONNULL_BEGIN
 IB_DESIGNABLE
 @interface FSCalendar : UIView
 
+@property (assign, nonatomic) BOOL                       needsAdjustingViewFrame;
 /**
  * The timezone of the calendar. `defaultTimeZone` by default.
  */
@@ -412,6 +413,10 @@ IB_DESIGNABLE
  The dates representing the selected dates. (read-only)
  */
 @property (readonly, nonatomic) NSArray<NSDate *> *selectedDates;
+
+
+- (void)invalidateLayout;
+- (void)invalidateCollectionViewLayout;
 
 /**
  Reload the dates and appearance of the calendar.

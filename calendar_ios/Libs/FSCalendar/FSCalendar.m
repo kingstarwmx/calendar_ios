@@ -12,7 +12,6 @@
 #import "FSCalendarWeekdayView.h"
 #import "FSCalendarStickyHeader.h"
 #import "FSCalendarCollectionViewLayout.h"
-
 #import "FSCalendarExtensions.h"
 #import "FSCalendarDynamicHeader.h"
 #import "FSCalendarCollectionView.h"
@@ -57,12 +56,13 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
 @property (weak  , nonatomic) FSCalendarCollectionView   *collectionView;
 @property (weak  , nonatomic) FSCalendarCollectionViewLayout *collectionViewLayout;
 
+
 @property (strong, nonatomic) FSCalendarTransitionCoordinator *transitionCoordinator;
 @property (strong, nonatomic) FSCalendarCalculator       *calculator;
 
 @property (weak  , nonatomic) FSCalendarHeaderTouchDeliver *deliver;
 
-@property (assign, nonatomic) BOOL                       needsAdjustingViewFrame;
+
 @property (assign, nonatomic) BOOL                       needsRequestingBoundingDates;
 @property (assign, nonatomic) CGFloat                    preferredHeaderHeight;
 @property (assign, nonatomic) CGFloat                    preferredWeekdayHeight;
@@ -99,7 +99,7 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
 - (void)enqueueSelectedDate:(NSDate *)date;
 
 - (void)invalidateDateTools;
-- (void)invalidateLayout;
+
 - (void)invalidateHeaders;
 - (void)invalidateAppearanceForCell:(FSCalendarCell *)cell forDate:(NSDate *)date;
 
@@ -220,6 +220,7 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
     collectionView.showsVerticalScrollIndicator = NO;
     collectionView.allowsMultipleSelection = NO;
     collectionView.clipsToBounds = YES;
+    collectionView.bounces = NO;
     [collectionView registerClass:[FSCalendarCell class] forCellWithReuseIdentifier:FSCalendarDefaultCellReuseIdentifier];
     [collectionView registerClass:[FSCalendarBlankCell class] forCellWithReuseIdentifier:FSCalendarBlankCellReuseIdentifier];
     [collectionView registerClass:[FSCalendarStickyHeader class] forSupplementaryViewOfKind:UICollectionElementKindSectionHeader withReuseIdentifier:@"header"];
@@ -303,6 +304,7 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
         }
         
         _contentView.frame = self.bounds;
+        NSInteger currentRows = [self.calculator numberOfRowsInMonth:self.currentPage];
         CGFloat headerHeight = self.preferredHeaderHeight;
         CGFloat weekdayHeight = self.preferredWeekdayHeight;
         CGFloat rowHeight = self.preferredRowHeight;
@@ -311,7 +313,8 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
         }
         CGFloat padding = 0;
         if (self.scrollDirection == UICollectionViewScrollDirectionHorizontal) {
-            rowHeight = FSCalendarFloor(rowHeight*2)*0.5; // Round to nearest multiple of 0.5. e.g. (16.8->16.5),(16.2->16.0)
+            // Round to nearest multiple of 0.5. e.g. (16.8->16.5),(16.2->16.0)
+//            rowHeight = FSCalendarFloor(rowHeight*2)*0.5;
         }
         
         self.calendarHeaderView.frame = CGRectMake(0, 0, self.fs_width, headerHeight);
@@ -1384,7 +1387,9 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
     
     _today = [self.gregorian dateFromComponents:dateComponents];
 }
-
+-(void)invalidateCollectionViewLayout {
+    [self.collectionViewLayout invalidateLayout];
+}
 - (void)invalidateLayout
 {
     if (!self.floatingMode) {
@@ -1437,6 +1442,7 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
     _preferredRowHeight = FSCalendarAutomaticDimension;
     _needsAdjustingViewFrame = YES;
     [self setNeedsLayout];
+    
 }
 
 - (void)invalidateHeaders

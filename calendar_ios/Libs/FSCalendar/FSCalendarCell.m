@@ -85,7 +85,8 @@
     
     self.clipsToBounds = NO;
     self.contentView.clipsToBounds = NO;
-    self.contentView.backgroundColor = UIColor.redColor;
+//    NSArray *arr = @[UIColor.redColor,UIColor.greenColor,UIColor.blueColor,UIColor.grayColor,UIColor.brownColor];
+//    self.contentView.backgroundColor = arr[arc4random()%5];
 }
 
 - (void)layoutSubviews

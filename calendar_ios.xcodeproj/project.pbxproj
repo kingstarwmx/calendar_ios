@@ -7,60 +7,60 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B8892FE8079C82773D2D72D4 /* Pods_calendar_ios.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 75370AA61074A591C73B1B1A /* Pods_calendar_ios.framework */; };
+		3E8E0207184EDB93D8A309FC /* Pods_calendar_ios.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D3022616610000CFAAA282AA /* Pods_calendar_ios.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		F803938C2E88E0F10005BD7C /* PBXContainerItemProxy */ = {
+		F8D7936C2E894A23004278D9 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = F803936D2E88E0EF0005BD7C /* Project object */;
+			containerPortal = F8D7934A2E894A22004278D9 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = F80393742E88E0EF0005BD7C;
+			remoteGlobalIDString = F8D793512E894A22004278D9;
 			remoteInfo = calendar_ios;
 		};
-		F80393962E88E0F10005BD7C /* PBXContainerItemProxy */ = {
+		F8D793762E894A23004278D9 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = F803936D2E88E0EF0005BD7C /* Project object */;
+			containerPortal = F8D7934A2E894A22004278D9 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = F80393742E88E0EF0005BD7C;
+			remoteGlobalIDString = F8D793512E894A22004278D9;
 			remoteInfo = calendar_ios;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		35A4F4088B6301E5787CE8FE /* Pods-calendar_ios.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-calendar_ios.debug.xcconfig"; path = "Target Support Files/Pods-calendar_ios/Pods-calendar_ios.debug.xcconfig"; sourceTree = "<group>"; };
-		75370AA61074A591C73B1B1A /* Pods_calendar_ios.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_calendar_ios.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		8DB2D3B845C4EC67B2CDD3BC /* Pods-calendar_ios.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-calendar_ios.release.xcconfig"; path = "Target Support Files/Pods-calendar_ios/Pods-calendar_ios.release.xcconfig"; sourceTree = "<group>"; };
-		F80393752E88E0EF0005BD7C /* calendar_ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = calendar_ios.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		F803938B2E88E0F10005BD7C /* calendar_iosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = calendar_iosTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		F80393952E88E0F10005BD7C /* calendar_iosUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = calendar_iosUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3A951CFDE1923FE80994A3CC /* Pods-calendar_ios.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-calendar_ios.release.xcconfig"; path = "Target Support Files/Pods-calendar_ios/Pods-calendar_ios.release.xcconfig"; sourceTree = "<group>"; };
+		D3022616610000CFAAA282AA /* Pods_calendar_ios.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_calendar_ios.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F8D793522E894A22004278D9 /* calendar_ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = calendar_ios.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F8D7936B2E894A23004278D9 /* calendar_iosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = calendar_iosTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F8D793752E894A23004278D9 /* calendar_iosUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = calendar_iosUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FDF5B981A26396A777B341C3 /* Pods-calendar_ios.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-calendar_ios.debug.xcconfig"; path = "Target Support Files/Pods-calendar_ios/Pods-calendar_ios.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		F803939D2E88E0F10005BD7C /* Exceptions for "calendar_ios" folder in "calendar_ios" target */ = {
+		F8D7937D2E894A23004278D9 /* Exceptions for "calendar_ios" folder in "calendar_ios" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = F80393742E88E0EF0005BD7C /* calendar_ios */;
+			target = F8D793512E894A22004278D9 /* calendar_ios */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		F80393772E88E0EF0005BD7C /* calendar_ios */ = {
+		F8D793542E894A22004278D9 /* calendar_ios */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				F803939D2E88E0F10005BD7C /* Exceptions for "calendar_ios" folder in "calendar_ios" target */,
+				F8D7937D2E894A23004278D9 /* Exceptions for "calendar_ios" folder in "calendar_ios" target */,
 			);
 			path = calendar_ios;
 			sourceTree = "<group>";
 		};
-		F803938E2E88E0F10005BD7C /* calendar_iosTests */ = {
+		F8D7936E2E894A23004278D9 /* calendar_iosTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = calendar_iosTests;
 			sourceTree = "<group>";
 		};
-		F80393982E88E0F10005BD7C /* calendar_iosUITests */ = {
+		F8D793782E894A23004278D9 /* calendar_iosUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = calendar_iosUITests;
 			sourceTree = "<group>";
@@ -68,22 +68,22 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		F80393722E88E0EF0005BD7C /* Frameworks */ = {
+		F8D7934F2E894A22004278D9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B8892FE8079C82773D2D72D4 /* Pods_calendar_ios.framework in Frameworks */,
+				3E8E0207184EDB93D8A309FC /* Pods_calendar_ios.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		F80393882E88E0F10005BD7C /* Frameworks */ = {
+		F8D793682E894A23004278D9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		F80393922E88E0F10005BD7C /* Frameworks */ = {
+		F8D793722E894A23004278D9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -93,41 +93,41 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		169B813536544D6903DB544B /* Frameworks */ = {
+		0C0E525E0B98C42CC493DFF5 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				75370AA61074A591C73B1B1A /* Pods_calendar_ios.framework */,
+				D3022616610000CFAAA282AA /* Pods_calendar_ios.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		8A5F2A52161ED7C5AB2BF828 /* Pods */ = {
+		4FD0AF0825CD7381BB019548 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				35A4F4088B6301E5787CE8FE /* Pods-calendar_ios.debug.xcconfig */,
-				8DB2D3B845C4EC67B2CDD3BC /* Pods-calendar_ios.release.xcconfig */,
+				FDF5B981A26396A777B341C3 /* Pods-calendar_ios.debug.xcconfig */,
+				3A951CFDE1923FE80994A3CC /* Pods-calendar_ios.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
 		};
-		F803936C2E88E0EF0005BD7C = {
+		F8D793492E894A22004278D9 = {
 			isa = PBXGroup;
 			children = (
-				F80393772E88E0EF0005BD7C /* calendar_ios */,
-				F803938E2E88E0F10005BD7C /* calendar_iosTests */,
-				F80393982E88E0F10005BD7C /* calendar_iosUITests */,
-				F80393762E88E0EF0005BD7C /* Products */,
-				8A5F2A52161ED7C5AB2BF828 /* Pods */,
-				169B813536544D6903DB544B /* Frameworks */,
+				F8D793542E894A22004278D9 /* calendar_ios */,
+				F8D7936E2E894A23004278D9 /* calendar_iosTests */,
+				F8D793782E894A23004278D9 /* calendar_iosUITests */,
+				F8D793532E894A22004278D9 /* Products */,
+				4FD0AF0825CD7381BB019548 /* Pods */,
+				0C0E525E0B98C42CC493DFF5 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
-		F80393762E88E0EF0005BD7C /* Products */ = {
+		F8D793532E894A22004278D9 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				F80393752E88E0EF0005BD7C /* calendar_ios.app */,
-				F803938B2E88E0F10005BD7C /* calendar_iosTests.xctest */,
-				F80393952E88E0F10005BD7C /* calendar_iosUITests.xctest */,
+				F8D793522E894A22004278D9 /* calendar_ios.app */,
+				F8D7936B2E894A23004278D9 /* calendar_iosTests.xctest */,
+				F8D793752E894A23004278D9 /* calendar_iosUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -135,130 +135,130 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		F80393742E88E0EF0005BD7C /* calendar_ios */ = {
+		F8D793512E894A22004278D9 /* calendar_ios */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = F803939E2E88E0F10005BD7C /* Build configuration list for PBXNativeTarget "calendar_ios" */;
+			buildConfigurationList = F8D7937E2E894A23004278D9 /* Build configuration list for PBXNativeTarget "calendar_ios" */;
 			buildPhases = (
-				84763F35A226B7732F4109F9 /* [CP] Check Pods Manifest.lock */,
-				F80393712E88E0EF0005BD7C /* Sources */,
-				F80393722E88E0EF0005BD7C /* Frameworks */,
-				F80393732E88E0EF0005BD7C /* Resources */,
-				766C60BF423AFA0AEB84084B /* [CP] Embed Pods Frameworks */,
+				B08C86570CEBE3474FB03123 /* [CP] Check Pods Manifest.lock */,
+				F8D7934E2E894A22004278D9 /* Sources */,
+				F8D7934F2E894A22004278D9 /* Frameworks */,
+				F8D793502E894A22004278D9 /* Resources */,
+				E49917EB409DCE5DAE411C92 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				F80393772E88E0EF0005BD7C /* calendar_ios */,
+				F8D793542E894A22004278D9 /* calendar_ios */,
 			);
 			name = calendar_ios;
 			productName = calendar_ios;
-			productReference = F80393752E88E0EF0005BD7C /* calendar_ios.app */;
+			productReference = F8D793522E894A22004278D9 /* calendar_ios.app */;
 			productType = "com.apple.product-type.application";
 		};
-		F803938A2E88E0F10005BD7C /* calendar_iosTests */ = {
+		F8D7936A2E894A23004278D9 /* calendar_iosTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = F80393A32E88E0F10005BD7C /* Build configuration list for PBXNativeTarget "calendar_iosTests" */;
+			buildConfigurationList = F8D793832E894A23004278D9 /* Build configuration list for PBXNativeTarget "calendar_iosTests" */;
 			buildPhases = (
-				F80393872E88E0F10005BD7C /* Sources */,
-				F80393882E88E0F10005BD7C /* Frameworks */,
-				F80393892E88E0F10005BD7C /* Resources */,
+				F8D793672E894A23004278D9 /* Sources */,
+				F8D793682E894A23004278D9 /* Frameworks */,
+				F8D793692E894A23004278D9 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				F803938D2E88E0F10005BD7C /* PBXTargetDependency */,
+				F8D7936D2E894A23004278D9 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				F803938E2E88E0F10005BD7C /* calendar_iosTests */,
+				F8D7936E2E894A23004278D9 /* calendar_iosTests */,
 			);
 			name = calendar_iosTests;
 			productName = calendar_iosTests;
-			productReference = F803938B2E88E0F10005BD7C /* calendar_iosTests.xctest */;
+			productReference = F8D7936B2E894A23004278D9 /* calendar_iosTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		F80393942E88E0F10005BD7C /* calendar_iosUITests */ = {
+		F8D793742E894A23004278D9 /* calendar_iosUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = F80393A62E88E0F10005BD7C /* Build configuration list for PBXNativeTarget "calendar_iosUITests" */;
+			buildConfigurationList = F8D793862E894A23004278D9 /* Build configuration list for PBXNativeTarget "calendar_iosUITests" */;
 			buildPhases = (
-				F80393912E88E0F10005BD7C /* Sources */,
-				F80393922E88E0F10005BD7C /* Frameworks */,
-				F80393932E88E0F10005BD7C /* Resources */,
+				F8D793712E894A23004278D9 /* Sources */,
+				F8D793722E894A23004278D9 /* Frameworks */,
+				F8D793732E894A23004278D9 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				F80393972E88E0F10005BD7C /* PBXTargetDependency */,
+				F8D793772E894A23004278D9 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				F80393982E88E0F10005BD7C /* calendar_iosUITests */,
+				F8D793782E894A23004278D9 /* calendar_iosUITests */,
 			);
 			name = calendar_iosUITests;
 			productName = calendar_iosUITests;
-			productReference = F80393952E88E0F10005BD7C /* calendar_iosUITests.xctest */;
+			productReference = F8D793752E894A23004278D9 /* calendar_iosUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		F803936D2E88E0EF0005BD7C /* Project object */ = {
+		F8D7934A2E894A22004278D9 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1640;
 				LastUpgradeCheck = 1640;
 				TargetAttributes = {
-					F80393742E88E0EF0005BD7C = {
+					F8D793512E894A22004278D9 = {
 						CreatedOnToolsVersion = 16.4;
 					};
-					F803938A2E88E0F10005BD7C = {
+					F8D7936A2E894A23004278D9 = {
 						CreatedOnToolsVersion = 16.4;
-						TestTargetID = F80393742E88E0EF0005BD7C;
+						TestTargetID = F8D793512E894A22004278D9;
 					};
-					F80393942E88E0F10005BD7C = {
+					F8D793742E894A23004278D9 = {
 						CreatedOnToolsVersion = 16.4;
-						TestTargetID = F80393742E88E0EF0005BD7C;
+						TestTargetID = F8D793512E894A22004278D9;
 					};
 				};
 			};
-			buildConfigurationList = F80393702E88E0EF0005BD7C /* Build configuration list for PBXProject "calendar_ios" */;
+			buildConfigurationList = F8D7934D2E894A22004278D9 /* Build configuration list for PBXProject "calendar_ios" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
 			);
-			mainGroup = F803936C2E88E0EF0005BD7C;
+			mainGroup = F8D793492E894A22004278D9;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = F80393762E88E0EF0005BD7C /* Products */;
+			productRefGroup = F8D793532E894A22004278D9 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				F80393742E88E0EF0005BD7C /* calendar_ios */,
-				F803938A2E88E0F10005BD7C /* calendar_iosTests */,
-				F80393942E88E0F10005BD7C /* calendar_iosUITests */,
+				F8D793512E894A22004278D9 /* calendar_ios */,
+				F8D7936A2E894A23004278D9 /* calendar_iosTests */,
+				F8D793742E894A23004278D9 /* calendar_iosUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		F80393732E88E0EF0005BD7C /* Resources */ = {
+		F8D793502E894A22004278D9 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		F80393892E88E0F10005BD7C /* Resources */ = {
+		F8D793692E894A23004278D9 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		F80393932E88E0F10005BD7C /* Resources */ = {
+		F8D793732E894A23004278D9 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -268,28 +268,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		766C60BF423AFA0AEB84084B /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-calendar_ios/Pods-calendar_ios-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			inputPaths = (
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-calendar_ios/Pods-calendar_ios-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-calendar_ios/Pods-calendar_ios-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		84763F35A226B7732F4109F9 /* [CP] Check Pods Manifest.lock */ = {
+		B08C86570CEBE3474FB03123 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -311,24 +290,45 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
+		E49917EB409DCE5DAE411C92 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-calendar_ios/Pods-calendar_ios-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-calendar_ios/Pods-calendar_ios-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-calendar_ios/Pods-calendar_ios-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		F80393712E88E0EF0005BD7C /* Sources */ = {
+		F8D7934E2E894A22004278D9 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		F80393872E88E0F10005BD7C /* Sources */ = {
+		F8D793672E894A23004278D9 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		F80393912E88E0F10005BD7C /* Sources */ = {
+		F8D793712E894A23004278D9 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -338,29 +338,35 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		F803938D2E88E0F10005BD7C /* PBXTargetDependency */ = {
+		F8D7936D2E894A23004278D9 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = F80393742E88E0EF0005BD7C /* calendar_ios */;
-			targetProxy = F803938C2E88E0F10005BD7C /* PBXContainerItemProxy */;
+			target = F8D793512E894A22004278D9 /* calendar_ios */;
+			targetProxy = F8D7936C2E894A23004278D9 /* PBXContainerItemProxy */;
 		};
-		F80393972E88E0F10005BD7C /* PBXTargetDependency */ = {
+		F8D793772E894A23004278D9 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = F80393742E88E0EF0005BD7C /* calendar_ios */;
-			targetProxy = F80393962E88E0F10005BD7C /* PBXContainerItemProxy */;
+			target = F8D793512E894A22004278D9 /* calendar_ios */;
+			targetProxy = F8D793762E894A23004278D9 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		F803939F2E88E0F10005BD7C /* Debug */ = {
+		F8D7937F2E894A23004278D9 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 35A4F4088B6301E5787CE8FE /* Pods-calendar_ios.debug.xcconfig */;
+			baseConfigurationReference = FDF5B981A26396A777B341C3 /* Pods-calendar_ios.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = FM877BFUN7;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/calendar_ios/Libs",
+					"$(PROJECT_DIR)/calendar_ios/Libs/FSCalendar",
+				);
 				INFOPLIST_FILE = calendar_ios/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -375,21 +381,28 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.wmx.calendartest.calendar-ios";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/calendar_ios/calendar_ios-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
-		F80393A02E88E0F10005BD7C /* Release */ = {
+		F8D793802E894A23004278D9 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 8DB2D3B845C4EC67B2CDD3BC /* Pods-calendar_ios.release.xcconfig */;
+			baseConfigurationReference = 3A951CFDE1923FE80994A3CC /* Pods-calendar_ios.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = FM877BFUN7;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/calendar_ios/Libs",
+					"$(PROJECT_DIR)/calendar_ios/Libs/FSCalendar",
+				);
 				INFOPLIST_FILE = calendar_ios/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -404,12 +417,13 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.wmx.calendartest.calendar-ios";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/calendar_ios/calendar_ios-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
-		F80393A12E88E0F10005BD7C /* Debug */ = {
+		F8D793812E894A23004278D9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -473,7 +487,7 @@
 			};
 			name = Debug;
 		};
-		F80393A22E88E0F10005BD7C /* Release */ = {
+		F8D793822E894A23004278D9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -530,7 +544,7 @@
 			};
 			name = Release;
 		};
-		F80393A42E88E0F10005BD7C /* Debug */ = {
+		F8D793842E894A23004278D9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -549,7 +563,7 @@
 			};
 			name = Debug;
 		};
-		F80393A52E88E0F10005BD7C /* Release */ = {
+		F8D793852E894A23004278D9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -568,7 +582,7 @@
 			};
 			name = Release;
 		};
-		F80393A72E88E0F10005BD7C /* Debug */ = {
+		F8D793872E894A23004278D9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -585,7 +599,7 @@
 			};
 			name = Debug;
 		};
-		F80393A82E88E0F10005BD7C /* Release */ = {
+		F8D793882E894A23004278D9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -605,43 +619,43 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		F80393702E88E0EF0005BD7C /* Build configuration list for PBXProject "calendar_ios" */ = {
+		F8D7934D2E894A22004278D9 /* Build configuration list for PBXProject "calendar_ios" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				F80393A12E88E0F10005BD7C /* Debug */,
-				F80393A22E88E0F10005BD7C /* Release */,
+				F8D793812E894A23004278D9 /* Debug */,
+				F8D793822E894A23004278D9 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		F803939E2E88E0F10005BD7C /* Build configuration list for PBXNativeTarget "calendar_ios" */ = {
+		F8D7937E2E894A23004278D9 /* Build configuration list for PBXNativeTarget "calendar_ios" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				F803939F2E88E0F10005BD7C /* Debug */,
-				F80393A02E88E0F10005BD7C /* Release */,
+				F8D7937F2E894A23004278D9 /* Debug */,
+				F8D793802E894A23004278D9 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		F80393A32E88E0F10005BD7C /* Build configuration list for PBXNativeTarget "calendar_iosTests" */ = {
+		F8D793832E894A23004278D9 /* Build configuration list for PBXNativeTarget "calendar_iosTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				F80393A42E88E0F10005BD7C /* Debug */,
-				F80393A52E88E0F10005BD7C /* Release */,
+				F8D793842E894A23004278D9 /* Debug */,
+				F8D793852E894A23004278D9 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		F80393A62E88E0F10005BD7C /* Build configuration list for PBXNativeTarget "calendar_iosUITests" */ = {
+		F8D793862E894A23004278D9 /* Build configuration list for PBXNativeTarget "calendar_iosUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				F80393A72E88E0F10005BD7C /* Debug */,
-				F80393A82E88E0F10005BD7C /* Release */,
+				F8D793872E894A23004278D9 /* Debug */,
+				F8D793882E894A23004278D9 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = F803936D2E88E0EF0005BD7C /* Project object */;
+	rootObject = F8D7934A2E894A22004278D9 /* Project object */;
 }
