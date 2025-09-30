@@ -79,53 +79,44 @@ final class CalendarViewController: UIViewController {
         emptyLabel.textColor = .secondaryLabel
         emptyLabel.font = UIFont.preferredFont(forTextStyle: .headline)
         emptyLabel.isHidden = true
-        
-        
-        
 
         view.addSubview(calendarView)
         view.addSubview(tableView)
         view.addSubview(emptyLabel)
         view.addSubview(inputToolbar)
 
-        layoutViews()
+        setupConstraints()
         setupInputToolbar()
 
         calendarView.select(viewModel.selectedDate)
         calendarView.setCurrentPage(viewModel.selectedDate, animated: false)
         updateMonthLabel(for: viewModel.selectedDate)
-        
-        
+    }
+
+    private func setupConstraints() {
+        // 使用SnapKit设置日历视图约束
+        calendarView.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(8)
+            make.leading.equalToSuperview().offset(8)
+            make.trailing.equalToSuperview().offset(-8)
+            make.height.equalTo(450)
+        }
+
+        // 设置表格视图约束
+        tableView.snp.makeConstraints { make in
+            make.top.equalTo(calendarView.snp.bottom).offset(8)
+            make.leading.trailing.equalToSuperview()
+            make.bottom.equalTo(inputToolbar.snp.top)
+        }
+
+        // 设置空标签约束
+        emptyLabel.snp.makeConstraints { make in
+            make.center.equalTo(tableView)
+        }
     }
 
     private func layoutViews() {
-        let safeArea = view.safeAreaLayoutGuide.layoutFrame
-        let margin: CGFloat = 16
-
-        // Input toolbar
-        inputToolbar.translatesAutoresizingMaskIntoConstraints = false
-
-        // Calendar view
-        let calendarHeight: CGFloat = 600
-        calendarView.frame = CGRect(
-            x: margin,
-            y: safeArea.minY + 8,
-            width: view.frame.width - margin * 2,
-            height: calendarHeight
-        )
-
-        // Table view (减去工具栏内容高度54pt)
-        let toolbarContentHeight: CGFloat = 54
-        tableView.frame = CGRect(
-            x: 0,
-            y: calendarView.frame.maxY + 8,
-            width: view.frame.width,
-            height: safeArea.maxY - (calendarView.frame.maxY + 8) - toolbarContentHeight
-        )
-
-        // Empty label
-        emptyLabel.sizeToFit()
-        emptyLabel.center = tableView.center
+        // 不再需要手动布局，使用SnapKit约束
     }
 
     private func bindViewModel() {
