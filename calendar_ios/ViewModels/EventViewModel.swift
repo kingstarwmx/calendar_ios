@@ -27,8 +27,83 @@ final class EventViewModel: ObservableObject {
             _ = await calendarService.refresh(range: range)
         }
         events = await calendarService.loadAllEvents(range: range)
+
+        // 如果没有事件，添加一些测试数据
+        if events.isEmpty {
+            print("⚠️ 没有找到事件，创建测试数据...")
+            await createTestEvents()
+        }
+
+        // 打印加载的事件数据
+        print("📅 加载事件数量: \(events.count)")
+        for event in events {
+            print("  - 事件: \(event.title), 日期: \(event.startDate), 全天: \(event.isAllDay)")
+        }
+
         deviceCalendarEnabled = await calendarService.devicePermissionStatus() == .authorized
         availableCalendars = await calendarService.availableDeviceCalendars()
+
+        print("📱 设备日历权限: \(deviceCalendarEnabled)")
+        print("📚 可用日历数量: \(availableCalendars.count)")
+    }
+
+    /// 创建测试事件数据
+    private func createTestEvents() async {
+        let calendar = Calendar.current
+        let today = Date()
+        let defaultCalendarId = "default-calendar"
+
+        // 创建几个测试事件
+        let testEvents = [
+            Event(
+                id: UUID().uuidString,
+                title: "团队会议",
+                startDate: calendar.date(byAdding: .hour, value: 10, to: today)!,
+                endDate: calendar.date(byAdding: .hour, value: 11, to: today)!,
+                isAllDay: false,
+                location: "会议室A",
+                calendarId: defaultCalendarId,
+                description: "讨论项目进度",
+                customColor: UIColor.systemBlue
+            ),
+            Event(
+                id: UUID().uuidString,
+                title: "午餐约会",
+                startDate: calendar.date(byAdding: .hour, value: 12, to: today)!,
+                endDate: calendar.date(byAdding: .hour, value: 13, to: today)!,
+                isAllDay: false,
+                location: "餐厅",
+                calendarId: defaultCalendarId,
+                description: nil,
+                customColor: UIColor.systemGreen
+            ),
+            Event(
+                id: UUID().uuidString,
+                title: "生日聚会",
+                startDate: calendar.date(byAdding: .day, value: 2, to: today)!,
+                endDate: calendar.date(byAdding: .day, value: 2, to: today)!,
+                isAllDay: true,
+                location: "家",
+                calendarId: defaultCalendarId,
+                description: "记得买礼物",
+                customColor: UIColor.systemPink
+            ),
+            Event(
+                id: UUID().uuidString,
+                title: "项目截止日",
+                startDate: calendar.date(byAdding: .day, value: 5, to: today)!,
+                endDate: calendar.date(byAdding: .day, value: 5, to: today)!,
+                isAllDay: true,
+                location: "",
+                calendarId: defaultCalendarId,
+                description: "重要！",
+                customColor: UIColor.systemRed
+            )
+        ]
+
+        for event in testEvents {
+            await addEvent(event, syncToDevice: false)
+        }
     }
 
     func requestDeviceCalendarAccess() async {
@@ -51,6 +126,10 @@ final class EventViewModel: ObservableObject {
     }
 
     func addEvent(_ event: Event, syncToDevice: Bool = false) async {
+        print("➕ 准备添加事件: \(event.title)")
+        print("   日期: \(event.startDate)")
+        print("   同步到设备: \(syncToDevice)")
+
         do {
             try await calendarService.saveLocalEvent(event)
             var finalEvent = event
@@ -59,7 +138,9 @@ final class EventViewModel: ObservableObject {
             }
             events.append(finalEvent)
             events.sort(by: chronologicalSort)
+            print("✅ 事件添加成功")
         } catch {
+            print("❌ 添加事件失败: \(error)")
             assertionFailure("Failed to add event: \(error)")
         }
     }

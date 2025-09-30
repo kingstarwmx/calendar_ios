@@ -29,9 +29,18 @@ final class CalendarViewController: UIViewController {
         configureUI()
         bindViewModel()
         setupKeyboardObservers()
+
+        print("🚀 CalendarViewController - 开始加载数据")
+        print("📍 当前选中日期: \(viewModel.selectedDate)")
+
         Task {
+            print("🔐 请求设备日历访问权限...")
             await viewModel.requestDeviceCalendarAccess()
+
+            print("📊 开始加载事件...")
             await viewModel.loadEvents(forceRefresh: true)
+
+            print("✅ 数据加载完成")
         }
     }
 
@@ -67,6 +76,10 @@ final class CalendarViewController: UIViewController {
         calendarView.appearance.titleTodayColor = .white
         calendarView.appearance.eventDefaultColor = .systemBlue
         calendarView.appearance.eventSelectionColor = .systemBlue
+
+        // 设置FSCalendar的delegate和dataSource
+        calendarView.delegate = self
+        calendarView.dataSource = self
 
         tableView.register(EventListCell.self, forCellReuseIdentifier: EventListCell.reuseIdentifier)
         tableView.dataSource = self
@@ -256,30 +269,37 @@ final class CalendarViewController: UIViewController {
     }
 }
 
-//extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCalendarDelegateAppearance {
-//    func calendar(_ calendar: FSCalendar, numberOfEventsFor date: Date) -> Int {
-//        let count = viewModel.getEvents(for: date).count
-//        if viewModel.viewMode == .expanded {
-//            return min(count, 3)
-//        }
-//        return min(count, 1)
-//    }
-//
-//    func calendar(_ calendar: FSCalendar, didSelect date: Date, at monthPosition: FSCalendarMonthPosition) {
-//        viewModel.selectedDate = date
-//    }
-//
-//    func calendarCurrentPageDidChange(_ calendar: FSCalendar) {
-//        viewModel.setCurrentMonth(calendar.currentPage)
-//        updateMonthLabel(for: calendar.currentPage)
-//        Task { await viewModel.loadEvents(forceRefresh: true) }
-//    }
-//
-//    func calendar(_ calendar: FSCalendar, boundingRectWillChange bounds: CGRect, animated: Bool) {
-//        calendarHeightConstraint?.update(offset: bounds.height)
-//        view.layoutIfNeeded()
-//    }
-//}
+extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCalendarDelegateAppearance {
+    func calendar(_ calendar: FSCalendar, numberOfEventsFor date: Date) -> Int {
+        let count = viewModel.getEvents(for: date).count
+        // 最多显示3个点
+        return min(count, 3)
+    }
+
+    func calendar(_ calendar: FSCalendar, didSelect date: Date, at monthPosition: FSCalendarMonthPosition) {
+        print("📆 选中日期: \(date)")
+        viewModel.selectedDate = date
+
+        // 获取并打印选中日期的事件
+        let events = viewModel.getEvents(for: date)
+        print("   当天事件数: \(events.count)")
+        for event in events {
+            print("   - \(event.title) (\(event.isAllDay ? "全天" : "定时"))")
+        }
+    }
+
+    func calendarCurrentPageDidChange(_ calendar: FSCalendar) {
+        viewModel.setCurrentMonth(calendar.currentPage)
+        updateMonthLabel(for: calendar.currentPage)
+        print("📅 切换到月份: \(calendar.currentPage)")
+        Task { await viewModel.loadEvents(forceRefresh: true) }
+    }
+
+    func calendar(_ calendar: FSCalendar, boundingRectWillChange bounds: CGRect, animated: Bool) {
+        // 处理日历大小变化
+        view.layoutIfNeeded()
+    }
+}
 
 extension CalendarViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
