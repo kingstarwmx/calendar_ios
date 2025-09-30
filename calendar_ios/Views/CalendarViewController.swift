@@ -11,19 +11,24 @@ final class CalendarViewController: UIViewController {
     private let monthLabel = UILabel()
     private let emptyLabel = UILabel()
 
+    /// 输入工具栏
+    private let inputToolbar = InputToolbarView()
+
     init(viewModel: EventViewModel? = nil) {
         self.viewModel = viewModel ?? EventViewModel()
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        self.viewModel = EventViewModel()
+        super.init(coder: coder)
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         configureUI()
         bindViewModel()
+        setupKeyboardObservers()
         Task {
             await viewModel.requestDeviceCalendarAccess()
             await viewModel.loadEvents(forceRefresh: true)
@@ -32,7 +37,11 @@ final class CalendarViewController: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        
+
+        // 更新工具栏高度以适配安全区
+//        inputToolbar.snp.updateConstraints { make in
+//            make.height.equalTo(54 + view.safeAreaInsets.bottom)
+//        }
     }
 
     private func configureUI() {
@@ -70,12 +79,17 @@ final class CalendarViewController: UIViewController {
         emptyLabel.textColor = .secondaryLabel
         emptyLabel.font = UIFont.preferredFont(forTextStyle: .headline)
         emptyLabel.isHidden = true
+        
+        
+        
 
         view.addSubview(calendarView)
         view.addSubview(tableView)
         view.addSubview(emptyLabel)
-        
+        view.addSubview(inputToolbar)
+
         layoutViews()
+        setupInputToolbar()
 
         calendarView.select(viewModel.selectedDate)
         calendarView.setCurrentPage(viewModel.selectedDate, animated: false)
@@ -88,6 +102,9 @@ final class CalendarViewController: UIViewController {
         let safeArea = view.safeAreaLayoutGuide.layoutFrame
         let margin: CGFloat = 16
 
+        // Input toolbar
+        inputToolbar.translatesAutoresizingMaskIntoConstraints = false
+
         // Calendar view
         let calendarHeight: CGFloat = 600
         calendarView.frame = CGRect(
@@ -97,12 +114,13 @@ final class CalendarViewController: UIViewController {
             height: calendarHeight
         )
 
-        // Table view
+        // Table view (减去工具栏内容高度54pt)
+        let toolbarContentHeight: CGFloat = 54
         tableView.frame = CGRect(
             x: 0,
             y: calendarView.frame.maxY + 8,
             width: view.frame.width,
-            height: safeArea.maxY - (calendarView.frame.maxY + 8)
+            height: safeArea.maxY - (calendarView.frame.maxY + 8) - toolbarContentHeight
         )
 
         // Empty label
@@ -128,6 +146,8 @@ final class CalendarViewController: UIViewController {
                 self.updateMonthLabel(for: date)
                 self.tableView.reloadData()
                 self.emptyLabel.isHidden = !self.viewModel.getEvents(for: date).isEmpty
+                // 更新工具栏提示语
+                self.inputToolbar.selectedDate = date
             }
             .store(in: &cancellables)
 
@@ -147,6 +167,79 @@ final class CalendarViewController: UIViewController {
 
     private func apply(viewMode: CalendarViewMode) {
         // View mode functionality removed
+    }
+
+    /// 设置输入工具栏
+    private func setupInputToolbar() {
+        // 设置选中日期
+        inputToolbar.selectedDate = viewModel.selectedDate
+
+        // 使用SnapKit设置约束
+        inputToolbar.snp.makeConstraints { make in
+            make.leading.trailing.bottom.equalToSuperview()
+            // 高度 = 54pt内容区 + 底部安全区高度
+            make.height.equalTo(54 + SafeAreaHelper.getBottomSafeAreaInset())
+        }
+    }
+
+    /// 设置键盘监听
+    private func setupKeyboardObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillShow),
+            name: UIResponder.keyboardWillShowNotification,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillHide),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil
+        )
+    }
+
+    /// 键盘显示时
+    @objc private func keyboardWillShow(_ notification: Notification) {
+        guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+              let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval else {
+            return
+        }
+
+        // 计算键盘顶部相对于屏幕的位置
+        let keyboardTop = view.frame.height - keyboardFrame.height
+
+        // 键盘弹起时，工具栏紧贴键盘，高度只需要54pt
+        inputToolbar.snp.remakeConstraints { make in
+            make.leading.trailing.equalToSuperview()
+            make.top.equalToSuperview().offset(keyboardTop - 54)
+            make.bottom.equalToSuperview().offset(-keyboardFrame.height)
+        }
+
+        UIView.animate(withDuration: duration) {
+            self.view.layoutIfNeeded()
+        }
+    }
+
+    /// 键盘隐藏时
+    @objc private func keyboardWillHide(_ notification: Notification) {
+        guard let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval else {
+            return
+        }
+
+        // 键盘收起时，恢复工具栏位置和高度（包含安全区）
+        inputToolbar.snp.remakeConstraints { make in
+            make.leading.trailing.bottom.equalToSuperview()
+            make.height.equalTo(54 + SafeAreaHelper.getBottomSafeAreaInset())
+        }
+
+        UIView.animate(withDuration: duration) {
+            self.view.layoutIfNeeded()
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     @objc private func addTapped() {
