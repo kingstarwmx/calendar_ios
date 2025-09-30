@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude --version)",
+      "Bash(npm update:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(pod install:*)",
+      "Bash(xcrun simctl list:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
