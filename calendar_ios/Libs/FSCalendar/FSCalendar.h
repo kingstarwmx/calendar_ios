@@ -419,6 +419,7 @@ IB_DESIGNABLE
 - (void)invalidateCollectionViewLayout;
 - (CGFloat)preferredWeekdayHeight;
 - (CGFloat)preferredHeaderHeight;
+- (CGFloat)getCurrentCellHeight;
 /**
  Reload the dates and appearance of the calendar.
  */

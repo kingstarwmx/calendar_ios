@@ -359,6 +359,20 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
         updateMonthLabel(for: calendar.currentPage)
         print("📅 切换到月份: \(calendar.currentPage)")
 
+        // 延迟0.1秒后调整maxHeight，添加动画效果
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self = self else { return }
+            let fullCalendarH = DeviceHelper.screenHeight - DeviceHelper.navigationBarTotalHeight() - DeviceHelper.getBottomSafeAreaInset() - 54.0
+
+            UIView.animate(withDuration: 0.3) {
+                if calendar.numberOfRowsForCurrentMonth() == 5 {
+                    self.calendarView.maxHeight = fullCalendarH * 1.2
+                } else {
+                    self.calendarView.maxHeight = fullCalendarH
+                }
+            }
+        }
+
         Task {
             await viewModel.loadEvents(forceRefresh: true)
         }
@@ -367,7 +381,35 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
     func calendar(_ calendar: FSCalendar, boundingRectWillChange bounds: CGRect, animated: Bool) {
         // 日历大小改变时更新约束
         calendarHeightConstraint?.constant = bounds.height
-        view.layoutIfNeeded()
+
+        // 实时更新tableView位置以跟随日历底部
+        let numberOfRows = calendar.numberOfRowsForCurrentMonth()
+        if numberOfRows < 6 && (calendar.scope == .month || calendar.scope == .maxHeight) {
+            // 计算单行高度
+            let rowHeight = calendar.getCurrentCellHeight()
+
+            // 计算需要向上偏移的距离：(6 - 实际行数) * 单行高度
+            let emptyRows = 6 - numberOfRows
+            let offsetDistance = CGFloat(emptyRows) * rowHeight
+
+            // 更新tableView的top约束，向上偏移以覆盖空白行
+            tableView.snp.updateConstraints { make in
+                make.top.equalTo(calendarView.snp.bottom).offset(8 - offsetDistance)
+            }
+        } else {
+            // 6行或week模式，不需要偏移
+            tableView.snp.updateConstraints { make in
+                make.top.equalTo(calendarView.snp.bottom).offset(8)
+            }
+        }
+
+        if animated {
+            UIView.animate(withDuration: 0.3) {
+                self.view.layoutIfNeeded()
+            }
+        } else {
+            view.layoutIfNeeded()
+        }
     }
 }
 
