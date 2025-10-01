@@ -1,6 +1,7 @@
 import UIKit
 import Combine
 
+@MainActor
 final class CalendarViewController: UIViewController {
     private let viewModel: EventViewModel
     private var cancellables: Set<AnyCancellable> = []
@@ -19,6 +20,9 @@ final class CalendarViewController: UIViewController {
     /// 日历高度约束
     private var calendarHeightConstraint: NSLayoutConstraint?
 
+    /// 标记是否已经初始化过tableView的偏移
+    private var hasInitializedTableViewOffset = false
+
     init(viewModel: EventViewModel? = nil) {
         self.viewModel = viewModel ?? EventViewModel()
         super.init(nibName: nil, bundle: nil)
@@ -35,8 +39,6 @@ final class CalendarViewController: UIViewController {
         bindViewModel()
         setupKeyboardObservers()
         setupScopeGesture()
-        
-        let num = calendarView.numberOfRowsForCurrentMonth()
 
         print("🚀 CalendarViewController - 开始加载数据")
         print("📍 当前选中日期: \(viewModel.selectedDate)")
@@ -55,10 +57,11 @@ final class CalendarViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
 
-        // 更新工具栏高度以适配安全区
-//        inputToolbar.snp.updateConstraints { make in
-//            make.height.equalTo(54 + view.safeAreaInsets.bottom)
-//        }
+        // 初次布局后，调整日程列表位置
+        if !hasInitializedTableViewOffset && calendarView.frame.size.height > 0 {
+            hasInitializedTableViewOffset = true
+            updateTableViewOffset()
+        }
     }
 
     private func configureUI() {
@@ -75,7 +78,7 @@ final class CalendarViewController: UIViewController {
         calendarView.weekdayHeight = 32
         calendarView.scope = .month
         calendarView.placeholderType = .fillSixRows
-        calendarView.maxHeight = DeviceHelper.screenHeight - DeviceHelper.navigationBarTotalHeight() - DeviceHelper.getBottomSafeAreaInset() - 54.0;  // 设置最大高度，允许展开到更多行
+        calendarView.clipsToBounds = false  // 允许tableView覆盖到日历区域
         calendarView.appearance.weekdayTextColor = .secondaryLabel
         calendarView.appearance.titleFont = UIFont.systemFont(ofSize: 16, weight: .medium)
         calendarView.appearance.subtitleFont = UIFont.systemFont(ofSize: 12)
@@ -112,6 +115,16 @@ final class CalendarViewController: UIViewController {
         calendarView.select(viewModel.selectedDate)
         calendarView.setCurrentPage(viewModel.selectedDate, animated: false)
         updateMonthLabel(for: viewModel.selectedDate)
+
+
+        let fullCalendarH = DeviceHelper.screenHeight - DeviceHelper.navigationBarTotalHeight() - DeviceHelper.getBottomSafeAreaInset() - 54.0;  // 设置最大高度，允许展开到更多行
+        let numberOfRows = calendarView.numberOfRowsForCurrentMonth()
+        if (numberOfRows==5) {
+            calendarView.maxHeight = fullCalendarH * 1.2
+        }else {
+            calendarView.maxHeight = fullCalendarH
+        }
+
     }
 
     private func setupConstraints() {
@@ -176,6 +189,35 @@ final class CalendarViewController: UIViewController {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy年MM月"
         monthLabel.text = formatter.string(from: date)
+
+        // 更新日程列表位置以覆盖空白行
+        updateTableViewOffset()
+    }
+
+    /// 根据当月实际行数调整日程列表位置
+    /// 当月只有4-5行时，向上移动日程列表以覆盖空白的第6行
+    private func updateTableViewOffset() {
+        let numberOfRows = calendarView.numberOfRowsForCurrentMonth()
+
+        // 计算单行高度：(屏幕宽度 - 左右边距) / 7
+        let calendarWidth = DeviceHelper.screenWidth - 16  // 左右各8pt边距
+        let rowHeight = calendarWidth / 7.0
+
+        // 计算需要向上偏移的距离：(6 - 实际行数) * 单行高度
+        let emptyRows = 6 - numberOfRows
+        let offsetDistance = CGFloat(emptyRows) * rowHeight
+
+        // 更新tableView的top约束，向上偏移以覆盖空白行
+        // offset从8变为 8 - offsetDistance
+        tableView.snp.updateConstraints { make in
+            make.top.equalTo(calendarView.snp.bottom).offset(8 - offsetDistance)
+        }
+
+        UIView.animate(withDuration: 0.3) {
+            self.view.layoutIfNeeded()
+        }
+
+        print("📏 当月行数: \(numberOfRows), 向上偏移: \(offsetDistance)pt")
     }
 
     private func apply(viewMode: CalendarViewMode) {
@@ -291,6 +333,7 @@ final class CalendarViewController: UIViewController {
     }
 }
 
+@MainActor
 extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCalendarDelegateAppearance {
     func calendar(_ calendar: FSCalendar, numberOfEventsFor date: Date) -> Int {
         let count = viewModel.getEvents(for: date).count
@@ -301,23 +344,22 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
     func calendar(_ calendar: FSCalendar, didSelect date: Date, at monthPosition: FSCalendarMonthPosition) {
         print("📆 选中日期: \(date)")
 
-        Task { @MainActor in
-            viewModel.selectedDate = date
+        viewModel.selectedDate = date
 
-            // 获取并打印选中日期的事件
-            let events = viewModel.getEvents(for: date)
-            print("   当天事件数: \(events.count)")
-            for event in events {
-                print("   - \(event.title) (\(event.isAllDay ? "全天" : "定时"))")
-            }
+        // 获取并打印选中日期的事件
+        let events = viewModel.getEvents(for: date)
+        print("   当天事件数: \(events.count)")
+        for event in events {
+            print("   - \(event.title) (\(event.isAllDay ? "全天" : "定时"))")
         }
     }
 
     func calendarCurrentPageDidChange(_ calendar: FSCalendar) {
-        Task { @MainActor in
-            viewModel.setCurrentMonth(calendar.currentPage)
-            updateMonthLabel(for: calendar.currentPage)
-            print("📅 切换到月份: \(calendar.currentPage)")
+        viewModel.setCurrentMonth(calendar.currentPage)
+        updateMonthLabel(for: calendar.currentPage)
+        print("📅 切换到月份: \(calendar.currentPage)")
+
+        Task {
             await viewModel.loadEvents(forceRefresh: true)
         }
     }

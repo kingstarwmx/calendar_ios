@@ -1036,7 +1036,9 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
     if (available <= 0) {
         return baselineRow;
     }
-    return MAX(available / 6.0f, baselineRow);
+    // 使用FSCalendarRound保持与FSCalendarSliceCake一致的精度
+    // 四舍五入到0.5，避免与layout计算产生精度差异
+    return MAX(FSCalendarRound(available / 6.0f * 2) * 0.5, baselineRow);
 }
 
 - (BOOL)canTransitionToMaxHeight
