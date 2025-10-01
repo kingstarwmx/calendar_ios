@@ -13,6 +13,12 @@ final class CalendarViewController: UIViewController {
     /// 输入工具栏
     private let inputToolbar = InputToolbarView()
 
+    /// scope切换手势
+    private var scopeGesture: UIPanGestureRecognizer?
+
+    /// 日历高度约束
+    private var calendarHeightConstraint: NSLayoutConstraint?
+
     init(viewModel: EventViewModel? = nil) {
         self.viewModel = viewModel ?? EventViewModel()
         super.init(nibName: nil, bundle: nil)
@@ -28,6 +34,7 @@ final class CalendarViewController: UIViewController {
         configureUI()
         bindViewModel()
         setupKeyboardObservers()
+        setupScopeGesture()
 
         print("🚀 CalendarViewController - 开始加载数据")
         print("📍 当前选中日期: \(viewModel.selectedDate)")
@@ -64,9 +71,9 @@ final class CalendarViewController: UIViewController {
 
         calendarView.headerHeight = 0
         calendarView.weekdayHeight = 32
-        calendarView.maxHeight = 520.0
         calendarView.scope = .month
         calendarView.placeholderType = .fillSixRows
+        calendarView.maxHeight = DeviceHelper.screenHeight - DeviceHelper.navigationBarTotalHeight() - DeviceHelper.getBottomSafeAreaInset() - 54.0;  // 设置最大高度，允许展开到更多行
         calendarView.appearance.weekdayTextColor = .secondaryLabel
         calendarView.appearance.titleFont = UIFont.systemFont(ofSize: 16, weight: .medium)
         calendarView.appearance.subtitleFont = UIFont.systemFont(ofSize: 12)
@@ -111,7 +118,8 @@ final class CalendarViewController: UIViewController {
             make.top.equalTo(view.safeAreaLayoutGuide).offset(8)
             make.leading.equalToSuperview().offset(8)
             make.trailing.equalToSuperview().offset(-8)
-            make.height.equalTo(450)
+            // 初始高度设置为month模式高度
+            calendarHeightConstraint = make.height.equalTo(350).constraint.layoutConstraints.first
         }
 
         // 设置表格视图约束
@@ -181,7 +189,7 @@ final class CalendarViewController: UIViewController {
         inputToolbar.snp.makeConstraints { make in
             make.leading.trailing.bottom.equalToSuperview()
             // 高度 = 54pt内容区 + 底部安全区高度
-            make.height.equalTo(54 + SafeAreaHelper.getBottomSafeAreaInset())
+            make.height.equalTo(54 + DeviceHelper.getBottomSafeAreaInset())
         }
     }
 
@@ -233,12 +241,25 @@ final class CalendarViewController: UIViewController {
         // 键盘收起时，恢复工具栏位置和高度（包含安全区）
         inputToolbar.snp.remakeConstraints { make in
             make.leading.trailing.bottom.equalToSuperview()
-            make.height.equalTo(54 + SafeAreaHelper.getBottomSafeAreaInset())
+            make.height.equalTo(54 + DeviceHelper.getBottomSafeAreaInset())
         }
 
         UIView.animate(withDuration: duration) {
             self.view.layoutIfNeeded()
         }
+    }
+
+    /// 设置scope切换手势
+    private func setupScopeGesture() {
+        let panGesture = UIPanGestureRecognizer(target: calendarView, action: #selector(calendarView.handleScopeGesture(_:)))
+        panGesture.delegate = self
+        panGesture.minimumNumberOfTouches = 1
+        panGesture.maximumNumberOfTouches = 2
+        view.addGestureRecognizer(panGesture)
+        self.scopeGesture = panGesture
+
+        // tableView的滑动手势需要等待scope手势失败
+        tableView.panGestureRecognizer.require(toFail: panGesture)
     }
 
     deinit {
@@ -300,8 +321,58 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
     }
 
     func calendar(_ calendar: FSCalendar, boundingRectWillChange bounds: CGRect, animated: Bool) {
-        // 处理日历大小变化
+        // 日历大小改变时更新约束
+        calendarHeightConstraint?.constant = bounds.height
         view.layoutIfNeeded()
+    }
+}
+
+// MARK: - UIGestureRecognizerDelegate
+extension CalendarViewController: UIGestureRecognizerDelegate {
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // 判断是否应该开始scope手势
+        guard let scopeGesture = gestureRecognizer as? UIPanGestureRecognizer else {
+            return true
+        }
+
+        // tableView在顶部时才允许开始手势
+        let shouldBegin = tableView.contentOffset.y <= -tableView.contentInset.top
+
+        if shouldBegin {
+            let velocity = scopeGesture.velocity(in: view)
+            switch calendarView.scope {
+            case .month:
+                // month模式下
+                if velocity.y < 0 {
+                    // 向上滑动，切换到week模式
+                    return true
+                }
+                if velocity.y > 0 {
+                    // 向下滑动，检查是否已达到最大高度
+                    let currentHeight = calendarView.bounds.height
+                    return calendarView.maxHeight > currentHeight + 1.0
+                }
+                return false
+
+            case .week:
+                // week模式下，只允许向下滑动切换到month模式
+                return velocity.y > 0
+
+            case .maxHeight:
+                // maxHeight模式下，只允许向上滑动
+                return velocity.y < 0
+
+            @unknown default:
+                return false
+            }
+        }
+
+        return shouldBegin
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        // 允许和tableView的手势同时识别
+        return gestureRecognizer == scopeGesture && otherGestureRecognizer == tableView.panGestureRecognizer
     }
 }
 
