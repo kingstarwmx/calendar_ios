@@ -35,6 +35,8 @@ final class CalendarViewController: UIViewController {
         bindViewModel()
         setupKeyboardObservers()
         setupScopeGesture()
+        
+        let num = calendarView.numberOfRowsForCurrentMonth()
 
         print("🚀 CalendarViewController - 开始加载数据")
         print("📍 当前选中日期: \(viewModel.selectedDate)")

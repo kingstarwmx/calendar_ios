@@ -1217,6 +1217,35 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
     [self.transitionCoordinator handleScopeGesture:sender];
 }
 
+- (NSInteger)numberOfRowsForCurrentMonth
+{
+    if (!_currentPage) return 0;
+
+    // 获取月份第一天
+    NSDateComponents *components = [self.gregorian components:NSCalendarUnitYear | NSCalendarUnitMonth fromDate:_currentPage];
+    components.day = 1;
+    NSDate *firstDayOfMonth = [self.gregorian dateFromComponents:components];
+
+    // 获取第一天是周几（1是周日，7是周六）
+    NSInteger weekdayOfFirstDay = [self.gregorian component:NSCalendarUnitWeekday fromDate:firstDayOfMonth];
+
+    // 获取当月天数
+    NSRange daysRange = [self.gregorian rangeOfUnit:NSCalendarUnitDay inUnit:NSCalendarUnitMonth forDate:_currentPage];
+    NSInteger numberOfDaysInMonth = daysRange.length;
+
+    // 计算前面的占位符数量（上个月的日期）
+    NSInteger firstWeekday = self.gregorian.firstWeekday; // 通常是1（周日）
+    NSInteger numberOfPlaceholders = ((weekdayOfFirstDay - firstWeekday) + 7) % 7;
+
+    // 计算总共需要的格子数
+    NSInteger totalCells = numberOfPlaceholders + numberOfDaysInMonth;
+
+    // 计算需要的行数
+    NSInteger numberOfRows = (totalCells / 7) + ((totalCells % 7) > 0 ? 1 : 0);
+
+    return numberOfRows;
+}
+
 #pragma mark - Private methods
 
 - (void)scrollToDate:(NSDate *)date

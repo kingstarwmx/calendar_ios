@@ -521,10 +521,17 @@ IB_DESIGNABLE
 
 /**
  An action selector for UIPanGestureRecognizer instance to control the scope transition
- 
+
  @param sender A UIPanGestureRecognizer instance which controls the scope of the calendar
  */
 - (void)handleScopeGesture:(UIPanGestureRecognizer *)sender;
+
+/**
+ Calculate the number of rows needed to display a specific month
+
+ @return The number of rows needed (typically 4-6 rows)
+ */
+- (NSInteger)numberOfRowsForCurrentMonth;
 
 @end
 
