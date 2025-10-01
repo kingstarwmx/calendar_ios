@@ -9,6 +9,7 @@
 #import "FSCalendarTransitionCoordinator.h"
 #import "FSCalendarExtensions.h"
 #import "FSCalendarDynamicHeader.h"
+#import <objc/runtime.h>
 
 @interface FSCalendar (MaxHeightTransition)
 - (BOOL)canTransitionToMaxHeight;
@@ -23,6 +24,7 @@
 @property (weak, nonatomic) FSCalendar *calendar;
 
 @property (strong, nonatomic) FSCalendarTransitionAttributes *transitionAttributes;
+@property (strong, nonatomic) CADisplayLink *displayLink;
 
 - (FSCalendarTransitionAttributes *)createTransitionAttributesTargetingScope:(FSCalendarScope)targetScope;
 - (FSCalendarTransitionAttributes *)createTransitionAttributesFromScope:(FSCalendarScope)sourceScope toScope:(FSCalendarScope)targetScope;
@@ -195,6 +197,8 @@
     CGFloat progress = maxTranslation > 0.0f ? directedTranslation / maxTranslation : 0.0f;
     [self performAlphaAnimationWithProgress:progress];
     [self performPathAnimationWithProgress:progress];
+    printf("progress: %f\n", progress);  // 使用 printf 替代 NSLog
+    NSLog(@"progess:%lf",progress);
 }
 
 - (void)scopeTransitionDidEnd:(UIPanGestureRecognizer *)panGesture
@@ -634,6 +638,97 @@
     FSCalendarScope normalizedSource = [self normalizedScope:attributes.sourceScope];
     FSCalendarScope normalizedTarget = [self normalizedScope:attributes.targetScope];
     return normalizedSource == FSCalendarScopeWeek || normalizedTarget == FSCalendarScopeWeek;
+}
+
+- (void)performMaxHeightExpansionWithDuration:(CGFloat)duration
+{
+    if (self.state != FSCalendarTransitionStateIdle) {
+        return;
+    }
+
+    // 当前必须在 maxHeight 模式
+    if (self.calendar.scope != FSCalendarScopeMaxHeight) {
+        return;
+    }
+
+    // 计算当前bounds和目标bounds（重新设置maxHeight后的bounds）
+    CGRect currentBounds = self.calendar.bounds;
+    CGFloat actualHeight = CGRectGetHeight(self.collectionView.bounds) + [self.calendar preferredHeaderHeight] + [self.calendar preferredWeekdayHeight];
+    CGFloat calendarHeight = CGRectGetHeight(self.calendar.bounds);
+    if (actualHeight > calendarHeight) {
+        currentBounds = CGRectMake(0, 0, CGRectGetWidth(self.calendar.bounds), actualHeight);
+    }
+    printf("currentBounds: %.1f ",CGRectGetHeight(currentBounds));
+        
+        
+    CGRect targetBounds = [self boundingRectForScope:FSCalendarScopeMaxHeight page:self.calendar.currentPage];
+
+    // 如果高度变化太小，不执行动画
+    CGFloat deltaHeight = CGRectGetHeight(targetBounds) - CGRectGetHeight(currentBounds);
+    if (fabs(deltaHeight) < 1.0) {
+        return;
+    }
+
+    printf("🎬 开始 maxHeight 扩展动画: %.1f -> %.1f (delta: %.1f)\n",
+           CGRectGetHeight(currentBounds), CGRectGetHeight(targetBounds), deltaHeight);
+
+    // 创建 transition attributes，模拟从当前高度到目标高度的过渡
+    FSCalendarTransitionAttributes *attr = [[FSCalendarTransitionAttributes alloc] init];
+    attr.sourceBounds = currentBounds;
+    attr.targetBounds = targetBounds;
+    attr.sourceScope = FSCalendarScopeMaxHeight;
+    attr.targetScope = FSCalendarScopeMaxHeight;
+    attr.sourcePage = self.calendar.currentPage;
+    attr.targetPage = self.calendar.currentPage;
+    attr.focusedRow = NSNotFound;  // maxHeight模式不需要行聚焦
+
+    self.transitionAttributes = attr;
+    self.state = FSCalendarTransitionStateChanging;
+
+    // 使用 UIView 动画，模拟 progress 从 0 到 1 的过程
+    // 通过 CADisplayLink 实现类似 scopeTransitionDidUpdate 的效果
+    __block CFTimeInterval startTime = CACurrentMediaTime();
+    __weak typeof(self) weakSelf = self;
+
+    CADisplayLink *displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(maxHeightExpansionTick:)];
+    displayLink.preferredFramesPerSecond = 60;
+    self.displayLink = displayLink;
+    [displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+
+    // 存储动画参数
+    objc_setAssociatedObject(self, "animationStartTime", @(startTime), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, "animationDuration", @(duration), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+- (void)maxHeightExpansionTick:(CADisplayLink *)displayLink
+{
+    CFTimeInterval startTime = [objc_getAssociatedObject(self, "animationStartTime") doubleValue];
+    CGFloat duration = [objc_getAssociatedObject(self, "animationDuration") doubleValue];
+
+    CFTimeInterval elapsed = CACurrentMediaTime() - startTime;
+    CGFloat progress = MIN(elapsed / duration, 1.0);
+
+    // 使用 ease-out 缓动
+    CGFloat easedProgress = 1.0 - pow(1.0 - progress, 2.0);
+
+    // 调用现有的 performPathAnimationWithProgress 方法
+    [self performPathAnimationWithProgress:easedProgress];
+
+    printf("📈 expansion progress: %.3f (eased: %.3f)\n", progress, easedProgress);
+
+    // 动画完成
+    if (progress >= 1.0) {
+        [self.displayLink invalidate];
+        self.displayLink = nil;
+        self.transitionAttributes = nil;
+        self.state = FSCalendarTransitionStateIdle;
+
+        // 确保最终布局正确
+        self.calendar.needsAdjustingViewFrame = YES;
+        [self.calendar setNeedsLayout];
+
+        printf("✅ maxHeight 扩展动画完成\n");
+    }
 }
 
 @end
