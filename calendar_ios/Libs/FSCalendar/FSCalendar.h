@@ -417,7 +417,8 @@ IB_DESIGNABLE
 
 - (void)invalidateLayout;
 - (void)invalidateCollectionViewLayout;
-
+- (CGFloat)preferredWeekdayHeight;
+- (CGFloat)preferredHeaderHeight;
 /**
  Reload the dates and appearance of the calendar.
  */

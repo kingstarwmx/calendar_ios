@@ -376,7 +376,14 @@
     FSCalendarTransitionAttributes *attributes = [[FSCalendarTransitionAttributes alloc] init];
     attributes.sourceScope = sourceScope;
     attributes.targetScope = targetScope;
-    attributes.sourceBounds = self.calendar.bounds;
+    
+    CGFloat actualHeight = CGRectGetHeight(self.collectionView.bounds) + [self.calendar preferredHeaderHeight] + [self.calendar preferredWeekdayHeight];
+    CGFloat calendarHeight = CGRectGetHeight(self.calendar.bounds);
+    if (actualHeight > calendarHeight) {
+        attributes.sourceBounds = CGRectMake(0, 0, CGRectGetWidth(self.calendar.bounds), actualHeight);
+    } else {
+        attributes.sourceBounds = self.calendar.bounds;
+    }
     attributes.sourcePage = self.calendar.currentPage;
 
     FSCalendarScope normalizedSource = [self normalizedScope:sourceScope];
