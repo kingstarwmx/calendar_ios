@@ -1,7 +1,6 @@
 import UIKit
 import Combine
 
-@MainActor
 final class CalendarViewController: UIViewController {
     private let viewModel: EventViewModel
     private var cancellables: Set<AnyCancellable> = []
@@ -278,21 +277,26 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
 
     func calendar(_ calendar: FSCalendar, didSelect date: Date, at monthPosition: FSCalendarMonthPosition) {
         print("📆 选中日期: \(date)")
-        viewModel.selectedDate = date
 
-        // 获取并打印选中日期的事件
-        let events = viewModel.getEvents(for: date)
-        print("   当天事件数: \(events.count)")
-        for event in events {
-            print("   - \(event.title) (\(event.isAllDay ? "全天" : "定时"))")
+        Task { @MainActor in
+            viewModel.selectedDate = date
+
+            // 获取并打印选中日期的事件
+            let events = viewModel.getEvents(for: date)
+            print("   当天事件数: \(events.count)")
+            for event in events {
+                print("   - \(event.title) (\(event.isAllDay ? "全天" : "定时"))")
+            }
         }
     }
 
     func calendarCurrentPageDidChange(_ calendar: FSCalendar) {
-        viewModel.setCurrentMonth(calendar.currentPage)
-        updateMonthLabel(for: calendar.currentPage)
-        print("📅 切换到月份: \(calendar.currentPage)")
-        Task { await viewModel.loadEvents(forceRefresh: true) }
+        Task { @MainActor in
+            viewModel.setCurrentMonth(calendar.currentPage)
+            updateMonthLabel(for: calendar.currentPage)
+            print("📅 切换到月份: \(calendar.currentPage)")
+            await viewModel.loadEvents(forceRefresh: true)
+        }
     }
 
     func calendar(_ calendar: FSCalendar, boundingRectWillChange bounds: CGRect, animated: Bool) {
