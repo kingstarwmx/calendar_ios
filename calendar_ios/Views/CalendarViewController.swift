@@ -363,20 +363,22 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
         viewModel.setCurrentMonth(calendar.currentPage)
         updateMonthLabel(for: calendar.currentPage)
         print("📅 切换到月份: \(calendar.currentPage)")
-        
-        // 延迟0.1秒后调整maxHeight，使用动画效果
+
+        Task {
+            await viewModel.loadEvents(forceRefresh: true)
+        }
+    }
+
+    func calendarDidEndPageScrollAnimation(_ calendar: FSCalendar) {
+        // 滚动动画完成后调整maxHeight并执行动画
         let fullCalendarH = DeviceHelper.screenHeight - DeviceHelper.navigationBarTotalHeight() - DeviceHelper.getBottomSafeAreaInset() - 54.0
         if calendar.numberOfRowsForCurrentMonth() == 5 {
             self.calendarView.maxHeight = fullCalendarH * 1.2
         } else {
             self.calendarView.maxHeight = fullCalendarH
         }
-        
-        calendar.transitionCoordinator.performMaxHeightExpansion(withDuration: 0.5)
 
-        Task {
-            await viewModel.loadEvents(forceRefresh: true)
-        }
+        calendar.transitionCoordinator.performMaxHeightExpansion(withDuration: 0.5)
     }
 
     func calendar(_ calendar: FSCalendar, boundingRectWillChange bounds: CGRect, animated: Bool) {

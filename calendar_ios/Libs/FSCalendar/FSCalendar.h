@@ -151,6 +151,11 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (void)calendarCurrentPageDidChange:(FSCalendar *)calendar;
 
+/**
+ Tells the delegate the calendar's collection view did end decelerating (page scroll animation finished).
+ */
+- (void)calendarDidEndPageScrollAnimation:(FSCalendar *)calendar;
+
 @end
 
 /**

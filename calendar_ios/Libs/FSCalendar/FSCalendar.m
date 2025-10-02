@@ -486,8 +486,17 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
 
 #pragma mark - <UICollectionViewDelegate>
 - (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView {
-    printf("");
- }
+    
+}
+// 用户拖拽后松手，滚动即将开始减速
+- (void)scrollViewWillBeginDecelerating:(UIScrollView *)scrollView {
+    // 即将开始减速
+    if ([self.delegateProxy respondsToSelector:@selector(calendarDidEndPageScrollAnimation:)]) {
+        [self.delegateProxy calendarDidEndPageScrollAnimation:self];
+    }
+}
+
+
 - (BOOL)collectionView:(UICollectionView *)collectionView shouldSelectItemAtIndexPath:(NSIndexPath *)indexPath
 {
     FSCalendarMonthPosition monthPosition = [self.calculator monthPositionForIndexPath:indexPath];
