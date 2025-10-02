@@ -6,7 +6,8 @@
       "Bash(xcodebuild:*)",
       "Bash(pod install:*)",
       "Bash(xcrun simctl list:*)",
-      "Read(//Users/star/Downloads/FSCalendar-master 3/Example-Objc/**)"
+      "Read(//Users/star/Downloads/FSCalendar-master 3/Example-Objc/**)",
+      "Read(//Users/star/Desktop/Projects/Calendar/Calendar/lib/widgets/**)"
     ],
     "deny": [],
     "ask": []

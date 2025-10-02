@@ -702,7 +702,8 @@
 
     // 使用 UIView 动画，模拟 progress 从 0 到 1 的过程
     // 通过 CADisplayLink 实现类似 scopeTransitionDidUpdate 的效果
-    __block CFTimeInterval startTime = CACurrentMediaTime();
+    // 延迟 100 毫秒（0.1 秒）开始动画
+    __block CFTimeInterval startTime = CACurrentMediaTime() + 0.2;
     __weak typeof(self) weakSelf = self;
 
     CADisplayLink *displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(maxHeightExpansionTick:)];

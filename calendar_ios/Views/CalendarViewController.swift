@@ -23,6 +23,14 @@ final class CalendarViewController: UIViewController {
     /// 标记是否已经初始化过tableView的偏移
     private var hasInitializedTableViewOffset = false
 
+    /// 计算日历的最大高度（全屏高度 - 导航栏 - 底部安全区 - 输入框）
+    private var fullCalendarHeight: CGFloat {
+        print("screenHeight: \(DeviceHelper.screenHeight)")
+        print("navigationBarTotalHeight: \(DeviceHelper.navigationBarTotalHeight())")
+        print("getBottomSafeAreaInset: \(DeviceHelper.getBottomSafeAreaInset())")
+        return DeviceHelper.screenHeight - DeviceHelper.navigationBarTotalHeight() - DeviceHelper.getBottomSafeAreaInset() - 54.0
+    }
+
     init(viewModel: EventViewModel? = nil) {
         self.viewModel = viewModel ?? EventViewModel()
         super.init(nibName: nil, bundle: nil)
@@ -95,6 +103,9 @@ final class CalendarViewController: UIViewController {
         calendarView.appearance.eventDefaultColor = .systemBlue
         calendarView.appearance.eventSelectionColor = .systemBlue
 
+        // 注册自定义 cell
+        calendarView.register(CustomCalendarCell.self, forCellReuseIdentifier: "CustomCell")
+
         // 设置FSCalendar的delegate和dataSource
         calendarView.delegate = self
         calendarView.dataSource = self
@@ -123,13 +134,12 @@ final class CalendarViewController: UIViewController {
         calendarView.setCurrentPage(viewModel.selectedDate, animated: false)
         updateMonthLabel(for: viewModel.selectedDate)
 
-
-        let fullCalendarH = DeviceHelper.screenHeight - DeviceHelper.navigationBarTotalHeight() - DeviceHelper.getBottomSafeAreaInset() - 54.0;  // 设置最大高度，允许展开到更多行
+        // 根据当月行数设置最大高度
         let numberOfRows = calendarView.numberOfRowsForCurrentMonth()
-        if (numberOfRows==5) {
-            calendarView.maxHeight = fullCalendarH * 1.2
-        }else {
-            calendarView.maxHeight = fullCalendarH
+        if numberOfRows == 5 {
+            calendarView.maxHeight = fullCalendarHeight * 1.2
+        } else {
+            calendarView.maxHeight = fullCalendarHeight
         }
 
     }
@@ -137,18 +147,18 @@ final class CalendarViewController: UIViewController {
     private func setupConstraints() {
         // 使用SnapKit设置日历视图约束
         calendarView.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide).offset(8)
+            make.top.equalTo(view.safeAreaLayoutGuide)
             make.leading.equalToSuperview().offset(8)
             make.trailing.equalToSuperview().offset(-8)
             // 初始高度设置为month模式高度，使用低优先级避免冲突
-            let constraint = make.height.equalTo(350).constraint
+            let constraint = make.height.equalTo(500).constraint
             calendarHeightConstraint = constraint.layoutConstraints.first
             calendarHeightConstraint?.priority = .defaultHigh // 设置为高优先级而非必需
         }
 
         // 设置表格视图约束
         tableView.snp.makeConstraints { make in
-            make.top.equalTo(calendarView.snp.bottom).offset(8)
+            make.top.equalTo(calendarView.snp.bottom)
             make.leading.trailing.equalToSuperview()
             make.bottom.equalTo(inputToolbar.snp.top)
         }
@@ -210,20 +220,24 @@ final class CalendarViewController: UIViewController {
     /// 根据当月实际行数调整日程列表位置
     /// 当月只有4-5行时，向上移动日程列表以覆盖空白的第6行
     private func updateTableViewOffset() {
+        
         let numberOfRows = calendarView.numberOfRowsForCurrentMonth()
-
-        // 计算单行高度：(屏幕宽度 - 左右边距) / 7
-        let calendarWidth = DeviceHelper.screenWidth - 16  // 左右各8pt边距
-        let rowHeight = calendarWidth / 7.0
+        // 使用 FSCalendar 的实际单元格高度
+        let rowHeight = calendarView.getCurrentCellHeight()
 
         // 计算需要向上偏移的距离：(6 - 实际行数) * 单行高度
         let emptyRows = 6 - numberOfRows
-        let offsetDistance = CGFloat(emptyRows) * rowHeight
+        var offsetDistance = CGFloat(emptyRows) * rowHeight
+        
+        if calendarView.scope == .week {
+            offsetDistance = 0
+        }
+        
 
         // 更新tableView的top约束，向上偏移以覆盖空白行
         // offset从8变为 8 - offsetDistance
         tableView.snp.updateConstraints { make in
-            make.top.equalTo(calendarView.snp.bottom).offset(8 - offsetDistance)
+            make.top.equalTo(calendarView.snp.bottom).offset(-offsetDistance)
         }
 
         // 只有在窗口层级中时才执行动画
@@ -236,7 +250,7 @@ final class CalendarViewController: UIViewController {
             view.layoutIfNeeded()
         }
 
-        print("📏 当月行数: \(numberOfRows), 向上偏移: \(offsetDistance)pt")
+        print("📏 当月行数: \(numberOfRows), 单行高度: \(rowHeight)pt, 向上偏移: \(offsetDistance)pt")
     }
 
     private func apply(viewMode: CalendarViewMode) {
@@ -354,16 +368,31 @@ final class CalendarViewController: UIViewController {
 
 @MainActor
 extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCalendarDelegateAppearance {
+    func calendar(_ calendar: FSCalendar, cellFor date: Date, at position: FSCalendarMonthPosition) -> FSCalendarCell {
+        let cell = calendar.dequeueReusableCell(withIdentifier: "CustomCell", for: date, at: position) as! CustomCalendarCell
+
+        let events = viewModel.getEvents(for: date)
+        let isSelected = Calendar.current.isDate(date, inSameDayAs: viewModel.selectedDate)
+        let isToday = Calendar.current.isDateInToday(date)
+        let isPlaceholder = position != .current
+
+        cell.configure(with: date, events: events, isSelected: isSelected, isToday: isToday, isPlaceholder: isPlaceholder)
+
+        return cell
+    }
+
     func calendar(_ calendar: FSCalendar, numberOfEventsFor date: Date) -> Int {
-        let count = viewModel.getEvents(for: date).count
-        // 最多显示3个点
-        return min(count, 3)
+        // 返回 0，因为我们使用自定义 cell 来显示事件
+        return 0
     }
 
     func calendar(_ calendar: FSCalendar, didSelect date: Date, at monthPosition: FSCalendarMonthPosition) {
         print("📆 选中日期: \(date)")
 
         viewModel.selectedDate = date
+
+        // 刷新日历以更新选中状态
+        calendar.reloadData()
 
         // 获取并打印选中日期的事件
         let events = viewModel.getEvents(for: date)
@@ -384,19 +413,19 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
     func calendarDidEndPageScrollAnimation(_ calendar: FSCalendar) {
         print("calendarDidEndPageScrollAnimation")
         // 滚动动画完成后调整maxHeight并执行动画
-        let fullCalendarH = DeviceHelper.screenHeight - DeviceHelper.navigationBarTotalHeight() - DeviceHelper.getBottomSafeAreaInset() - 54.0
         if calendar.numberOfRowsForCurrentMonth() == 5 {
-            self.calendarView.maxHeight = fullCalendarH * 1.2
+            self.calendarView.maxHeight = fullCalendarHeight * 1.2
         } else {
-            self.calendarView.maxHeight = fullCalendarH
+            self.calendarView.maxHeight = fullCalendarHeight
         }
 
-        calendar.transitionCoordinator.performMaxHeightExpansion(withDuration: 0.4)
+        calendar.transitionCoordinator.performMaxHeightExpansion(withDuration: 0.2)
     }
 
     func calendar(_ calendar: FSCalendar, boundingRectWillChange bounds: CGRect, animated: Bool) {
         // 日历大小改变时更新约束
         calendarHeightConstraint?.constant = bounds.height
+        print("bounds.height: \(bounds.height)")
 
         // 实时更新tableView位置以跟随日历底部
         let numberOfRows = calendar.numberOfRowsForCurrentMonth()
@@ -406,11 +435,19 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
 
             // 计算需要向上偏移的距离：(6 - 实际行数) * 单行高度
             let emptyRows = 6 - numberOfRows
-            let offsetDistance = CGFloat(emptyRows) * rowHeight
+            var offsetDistance = CGFloat(emptyRows) * rowHeight
+            if calendarView.scope == .week {
+                offsetDistance = 0
+            }
+            
+            if bounds.height < (calendar.preferredWeekdayHeight() + rowHeight*2) {
+                return
+            }
+            
 
             // 更新tableView的top约束，向上偏移以覆盖空白行
             tableView.snp.updateConstraints { make in
-                make.top.equalTo(calendarView.snp.bottom).offset(8 - offsetDistance)
+                make.top.equalTo(calendarView.snp.bottom).offset(-offsetDistance)
             }
         } else {
             // 6行或week模式，不需要偏移

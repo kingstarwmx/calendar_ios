@@ -1261,7 +1261,12 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
 
 #pragma mark - Private methods
 - (CGFloat)getCurrentCellHeight{
-    return self.collectionView.frame.size.height / 6.0;
+//    return self.collectionView.frame.size.height / 6.0;
+    if (self.scope == FSCalendarScopeWeek) {
+        return  self.collectionView.frame.size.height;
+    } else {
+        return self.collectionView.frame.size.height / 6.0;
+    }
 }
 - (void)scrollToDate:(NSDate *)date
 {
