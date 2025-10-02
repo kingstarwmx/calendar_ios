@@ -36,27 +36,29 @@ final class CalendarViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        print("========================================")
-        print("🚀 CalendarViewController - viewDidLoad 开始")
-        print("========================================")
-
         configureUI()
-        bindViewModel()
         setupKeyboardObservers()
         setupScopeGesture()
 
-        print("🚀 CalendarViewController - 开始加载数据")
-        print("📍 当前选中日期: \(viewModel.selectedDate)")
+        // 延迟到下一个 runloop，确保视图已添加到层级中
+        DispatchQueue.main.async { [weak self] in
+            self?.bindViewModel()
 
-        Task {
-            print("🔐 请求设备日历访问权限...")
-            await viewModel.requestDeviceCalendarAccess()
+            // 加载数据
+            self?.loadInitialData()
+        }
+    }
 
-            print("📊 开始加载事件...")
-            await viewModel.loadEvents(forceRefresh: true)
+    private func loadInitialData() {
+        print("🔐 请求设备日历访问权限...")
 
+        viewModel.requestDeviceCalendarAccess {
             print("✅ 数据加载完成")
         }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
     }
 
     override func viewDidLayoutSubviews() {
@@ -138,8 +140,10 @@ final class CalendarViewController: UIViewController {
             make.top.equalTo(view.safeAreaLayoutGuide).offset(8)
             make.leading.equalToSuperview().offset(8)
             make.trailing.equalToSuperview().offset(-8)
-            // 初始高度设置为month模式高度
-            calendarHeightConstraint = make.height.equalTo(350).constraint.layoutConstraints.first
+            // 初始高度设置为month模式高度，使用低优先级避免冲突
+            let constraint = make.height.equalTo(350).constraint
+            calendarHeightConstraint = constraint.layoutConstraints.first
+            calendarHeightConstraint?.priority = .defaultHigh // 设置为高优先级而非必需
         }
 
         // 设置表格视图约束
@@ -163,16 +167,20 @@ final class CalendarViewController: UIViewController {
         viewModel.$events
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.calendarView.reloadData()
-                self?.tableView.reloadData()
-                self?.emptyLabel.isHidden = !(self?.viewModel.getEvents(for: self?.viewModel.selectedDate ?? Date()).isEmpty ?? true)
+                guard let self = self else { return }
+                // 移除 window 检查，因为初始数据加载时可能还没有 window
+                self.calendarView.reloadData()
+                self.tableView.reloadData()
+                self.emptyLabel.isHidden = !self.viewModel.getEvents(for: self.viewModel.selectedDate).isEmpty
+                print("🔄 日历数据已刷新")
             }
             .store(in: &cancellables)
 
         viewModel.$selectedDate
             .receive(on: DispatchQueue.main)
             .sink { [weak self] date in
-                guard let self else { return }
+                guard let self = self else { return }
+
                 self.calendarView.select(date, scrollToDate: true)
                 self.updateMonthLabel(for: date)
                 self.tableView.reloadData()
@@ -192,7 +200,7 @@ final class CalendarViewController: UIViewController {
 
     private func updateMonthLabel(for date: Date) {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy年MM月"
+        formatter.dateFormat = "M月"
         monthLabel.text = formatter.string(from: date)
 
         // 更新日程列表位置以覆盖空白行
@@ -218,8 +226,14 @@ final class CalendarViewController: UIViewController {
             make.top.equalTo(calendarView.snp.bottom).offset(8 - offsetDistance)
         }
 
-        UIView.animate(withDuration: 0.3) {
-            self.view.layoutIfNeeded()
+        // 只有在窗口层级中时才执行动画
+        if view.window != nil {
+            UIView.animate(withDuration: 0.3) {
+                self.view.layoutIfNeeded()
+            }
+        } else {
+            // 没有在窗口层级时，立即布局
+            view.layoutIfNeeded()
         }
 
         print("📏 当月行数: \(numberOfRows), 向上偏移: \(offsetDistance)pt")
@@ -364,12 +378,11 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
         updateMonthLabel(for: calendar.currentPage)
         print("📅 切换到月份: \(calendar.currentPage)")
 
-        Task {
-            await viewModel.loadEvents(forceRefresh: true)
-        }
+        viewModel.loadEvents(forceRefresh: true)
     }
 
     func calendarDidEndPageScrollAnimation(_ calendar: FSCalendar) {
+        print("calendarDidEndPageScrollAnimation")
         // 滚动动画完成后调整maxHeight并执行动画
         let fullCalendarH = DeviceHelper.screenHeight - DeviceHelper.navigationBarTotalHeight() - DeviceHelper.getBottomSafeAreaInset() - 54.0
         if calendar.numberOfRowsForCurrentMonth() == 5 {
@@ -378,7 +391,7 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
             self.calendarView.maxHeight = fullCalendarH
         }
 
-        calendar.transitionCoordinator.performMaxHeightExpansion(withDuration: 0.5)
+        calendar.transitionCoordinator.performMaxHeightExpansion(withDuration: 0.4)
     }
 
     func calendar(_ calendar: FSCalendar, boundingRectWillChange bounds: CGRect, animated: Bool) {

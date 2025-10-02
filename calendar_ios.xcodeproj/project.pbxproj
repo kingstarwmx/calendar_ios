@@ -57,15 +57,11 @@
 		};
 		F8D7936E2E894A23004278D9 /* calendar_iosTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = calendar_iosTests;
 			sourceTree = "<group>";
 		};
 		F8D793782E894A23004278D9 /* calendar_iosUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = calendar_iosUITests;
 			sourceTree = "<group>";
 		};
@@ -302,9 +298,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-calendar_ios/Pods-calendar_ios-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-calendar_ios/Pods-calendar_ios-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;

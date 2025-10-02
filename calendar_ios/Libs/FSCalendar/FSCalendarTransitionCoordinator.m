@@ -176,7 +176,6 @@
 
     // 检测方向变化：如果当前sourceScope是Month，根据translationY重新确定targetScope
     CGFloat translationY = [panGesture translationInView:panGesture.view].y;
-    printf("translationY: %f\n", translationY);  // 使用 printf 替代 NSLog
     if (attr.sourceScope == FSCalendarScopeMonth) {
         FSCalendarScope newTargetScope = attr.targetScope;
 
@@ -190,6 +189,7 @@
 
         // 如果目标发生了变化，重新创建transitionAttributes
         if (newTargetScope != attr.targetScope) {
+            printf("🔄 方向改变: %ld -> %ld\n", (long)attr.targetScope, (long)newTargetScope);
             self.transitionAttributes = [self createTransitionAttributesFromScope:attr.sourceScope toScope:newTargetScope];
             attr = self.transitionAttributes;
         }
@@ -218,7 +218,6 @@
     CGFloat progress = maxTranslation > 0.0f ? directedTranslation / maxTranslation : 0.0f;
     [self performAlphaAnimationWithProgress:progress];
     [self performPathAnimationWithProgress:progress];
-    printf("progress: %f\n", progress);
 }
 
 - (void)scopeTransitionDidEnd:(UIPanGestureRecognizer *)panGesture
@@ -678,7 +677,6 @@
     if (actualHeight > calendarHeight) {
         currentBounds = CGRectMake(0, 0, CGRectGetWidth(self.calendar.bounds), actualHeight);
     }
-    printf("currentBounds: %.1f ",CGRectGetHeight(currentBounds));
         
         
     CGRect targetBounds = [self boundingRectForScope:FSCalendarScopeMaxHeight page:self.calendar.currentPage];
@@ -688,9 +686,6 @@
     if (fabs(deltaHeight) < 1.0) {
         return;
     }
-
-    printf("🎬 开始 maxHeight 扩展动画: %.1f -> %.1f (delta: %.1f)\n",
-           CGRectGetHeight(currentBounds), CGRectGetHeight(targetBounds), deltaHeight);
 
     // 创建 transition attributes，模拟从当前高度到目标高度的过渡
     FSCalendarTransitionAttributes *attr = [[FSCalendarTransitionAttributes alloc] init];
@@ -734,7 +729,6 @@
     // 调用现有的 performPathAnimationWithProgress 方法
     [self performPathAnimationWithProgress:easedProgress];
 
-    printf("📈 expansion progress: %.3f (eased: %.3f)\n", progress, easedProgress);
 
     // 动画完成
     if (progress >= 1.0) {
@@ -747,7 +741,6 @@
         self.calendar.needsAdjustingViewFrame = YES;
         [self.calendar setNeedsLayout];
 
-        printf("✅ maxHeight 扩展动画完成\n");
     }
 }
 

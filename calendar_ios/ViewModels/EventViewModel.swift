@@ -18,102 +18,173 @@ final class EventViewModel: ObservableObject {
         self.calendarService = calendarService
     }
 
-    func loadEvents(forceRefresh: Bool = false) async {
-        isLoading = true
-        defer { isLoading = false }
-
-        let range = DateInterval(start: currentMonth.startOfMonth, end: currentMonth.endOfMonth)
-        if forceRefresh {
-            _ = await calendarService.refresh(range: range)
-        }
-        events = await calendarService.loadAllEvents(range: range)
-
-        // 如果没有事件，添加一些测试数据
-        if events.isEmpty {
-            print("⚠️ 没有找到事件，创建测试数据...")
-            await createTestEvents()
+    func loadEvents(forceRefresh: Bool = false, completion: (() -> Void)? = nil) {
+        DispatchQueue.main.async {
+            self.isLoading = true
         }
 
-        // 打印加载的事件数据
-        print("📅 加载事件数量: \(events.count)")
-        for event in events {
-            print("  - 事件: \(event.title), 日期: \(event.startDate), 全天: \(event.isAllDay)")
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            let semaphore = DispatchSemaphore(value: 0)
+            var loadedEvents: [Event] = []
+            var deviceEnabled = false
+            var calendars: [EKCalendarSummary] = []
+
+            Task {
+                let range = DateInterval(start: await self.currentMonth.startOfMonth, end: await self.currentMonth.endOfMonth)
+                if forceRefresh {
+                    _ = await self.calendarService.refresh(range: range)
+                }
+                loadedEvents = await self.calendarService.loadAllEvents(range: range)
+
+                deviceEnabled = await self.calendarService.devicePermissionStatus() == .authorized
+                calendars = await self.calendarService.availableDeviceCalendars()
+
+                semaphore.signal()
+            }
+
+            semaphore.wait()
+
+            DispatchQueue.main.async {
+                // 如果没有事件，添加一些测试数据
+                if loadedEvents.isEmpty {
+                    print("⚠️ 没有找到事件，创建测试数据...")
+                    self.createTestEvents { [weak self] in
+                        self?.loadEvents(forceRefresh: false, completion: completion)
+                    }
+                    return
+                }
+
+                self.events = loadedEvents
+                self.deviceCalendarEnabled = deviceEnabled
+                self.availableCalendars = calendars
+
+                // 打印加载的事件数据
+                print("📅 加载事件数量: \(self.events.count)")
+                for event in self.events {
+                    print("  - 事件: \(event.title), 日期: \(event.startDate), 全天: \(event.isAllDay)")
+                }
+
+                print("📱 设备日历权限: \(self.deviceCalendarEnabled)")
+                print("📚 可用日历数量: \(self.availableCalendars.count)")
+
+                self.isLoading = false
+                completion?()
+            }
         }
-
-        deviceCalendarEnabled = await calendarService.devicePermissionStatus() == .authorized
-        availableCalendars = await calendarService.availableDeviceCalendars()
-
-        print("📱 设备日历权限: \(deviceCalendarEnabled)")
-        print("📚 可用日历数量: \(availableCalendars.count)")
     }
 
     /// 创建测试事件数据
-    private func createTestEvents() async {
-        let calendar = Calendar.current
-        let today = Date()
-        let defaultCalendarId = "default-calendar"
+    private func createTestEvents(completion: (() -> Void)? = nil) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
 
-        // 创建几个测试事件
-        let testEvents = [
-            Event(
-                id: UUID().uuidString,
-                title: "团队会议",
-                startDate: calendar.date(byAdding: .hour, value: 10, to: today)!,
-                endDate: calendar.date(byAdding: .hour, value: 11, to: today)!,
-                isAllDay: false,
-                location: "会议室A",
-                calendarId: defaultCalendarId,
-                description: "讨论项目进度",
-                customColor: UIColor.systemBlue
-            ),
-            Event(
-                id: UUID().uuidString,
-                title: "午餐约会",
-                startDate: calendar.date(byAdding: .hour, value: 12, to: today)!,
-                endDate: calendar.date(byAdding: .hour, value: 13, to: today)!,
-                isAllDay: false,
-                location: "餐厅",
-                calendarId: defaultCalendarId,
-                description: nil,
-                customColor: UIColor.systemGreen
-            ),
-            Event(
-                id: UUID().uuidString,
-                title: "生日聚会",
-                startDate: calendar.date(byAdding: .day, value: 2, to: today)!,
-                endDate: calendar.date(byAdding: .day, value: 2, to: today)!,
-                isAllDay: true,
-                location: "家",
-                calendarId: defaultCalendarId,
-                description: "记得买礼物",
-                customColor: UIColor.systemPink
-            ),
-            Event(
-                id: UUID().uuidString,
-                title: "项目截止日",
-                startDate: calendar.date(byAdding: .day, value: 5, to: today)!,
-                endDate: calendar.date(byAdding: .day, value: 5, to: today)!,
-                isAllDay: true,
-                location: "",
-                calendarId: defaultCalendarId,
-                description: "重要！",
-                customColor: UIColor.systemRed
-            )
-        ]
+            let calendar = Calendar.current
+            let today = Date()
+            let defaultCalendarId = "default-calendar"
 
-        for event in testEvents {
-            await addEvent(event, syncToDevice: false)
+            // 创建几个测试事件
+            let testEvents = [
+                Event(
+                    id: UUID().uuidString,
+                    title: "团队会议",
+                    startDate: calendar.date(byAdding: .hour, value: 10, to: today)!,
+                    endDate: calendar.date(byAdding: .hour, value: 11, to: today)!,
+                    isAllDay: false,
+                    location: "会议室A",
+                    calendarId: defaultCalendarId,
+                    description: "讨论项目进度",
+                    customColor: UIColor.systemBlue
+                ),
+                Event(
+                    id: UUID().uuidString,
+                    title: "午餐约会",
+                    startDate: calendar.date(byAdding: .hour, value: 12, to: today)!,
+                    endDate: calendar.date(byAdding: .hour, value: 13, to: today)!,
+                    isAllDay: false,
+                    location: "餐厅",
+                    calendarId: defaultCalendarId,
+                    description: nil,
+                    customColor: UIColor.systemGreen
+                ),
+                Event(
+                    id: UUID().uuidString,
+                    title: "生日聚会",
+                    startDate: calendar.date(byAdding: .day, value: 2, to: today)!,
+                    endDate: calendar.date(byAdding: .day, value: 2, to: today)!,
+                    isAllDay: true,
+                    location: "家",
+                    calendarId: defaultCalendarId,
+                    description: "记得买礼物",
+                    customColor: UIColor.systemPink
+                ),
+                Event(
+                    id: UUID().uuidString,
+                    title: "项目截止日",
+                    startDate: calendar.date(byAdding: .day, value: 5, to: today)!,
+                    endDate: calendar.date(byAdding: .day, value: 5, to: today)!,
+                    isAllDay: true,
+                    location: "",
+                    calendarId: defaultCalendarId,
+                    description: "重要！",
+                    customColor: UIColor.systemRed
+                )
+            ]
+
+            let semaphore = DispatchSemaphore(value: 0)
+            var remaining = testEvents.count
+
+            for event in testEvents {
+                Task {
+                    await self.addEvent(event, syncToDevice: false)
+                    remaining -= 1
+                    if remaining == 0 {
+                        semaphore.signal()
+                    }
+                }
+            }
+
+            semaphore.wait()
+
+            DispatchQueue.main.async {
+                completion?()
+            }
         }
     }
 
-    func requestDeviceCalendarAccess() async {
-        let granted = await calendarService.requestDevicePermission()
-        deviceCalendarEnabled = granted
-        await calendarService.configureDeviceSync(enabled: granted)
-        if granted {
-            await calendarService.refreshCalendars()
-            availableCalendars = await calendarService.availableDeviceCalendars()
-            await loadEvents(forceRefresh: true)
+    func requestDeviceCalendarAccess(completion: (() -> Void)? = nil) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            let semaphore = DispatchSemaphore(value: 0)
+            var granted = false
+            var calendars: [EKCalendarSummary] = []
+
+            Task {
+                granted = await self.calendarService.requestDevicePermission()
+                await self.calendarService.configureDeviceSync(enabled: granted)
+
+                if granted {
+                    await self.calendarService.refreshCalendars()
+                    calendars = await self.calendarService.availableDeviceCalendars()
+                }
+
+                semaphore.signal()
+            }
+
+            semaphore.wait()
+
+            DispatchQueue.main.async {
+                self.deviceCalendarEnabled = granted
+                self.availableCalendars = calendars
+
+                if granted {
+                    self.loadEvents(forceRefresh: true, completion: completion)
+                } else {
+                    completion?()
+                }
+            }
         }
     }
 
@@ -176,10 +247,30 @@ final class EventViewModel: ObservableObject {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: date)
         let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? date
-        return events.filter { event in
+
+        // 获取普通事件
+        var allEvents = events.filter { event in
             let interval = event.allDayDisplayRange
             return interval.start < dayEnd && interval.end > dayStart
-        }.sorted(by: chronologicalSort)
+        }
+
+        // 添加节假日事件
+        if let holidayName = HolidayService.shared.getHoliday(for: date) {
+            let holidayEvent = Event(
+                id: "holiday-\(date.timeIntervalSince1970)",
+                title: holidayName,
+                startDate: dayStart,
+                endDate: dayEnd,
+                isAllDay: true,
+                location: "",
+                calendarId: "holiday-calendar",
+                description: "法定节假日",
+                customColor: .systemRed
+            )
+            allEvents.append(holidayEvent)
+        }
+
+        return allEvents.sorted(by: chronologicalSort)
     }
 
     func goToToday() {
