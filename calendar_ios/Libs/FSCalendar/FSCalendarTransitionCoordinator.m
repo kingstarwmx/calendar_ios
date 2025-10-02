@@ -171,8 +171,30 @@
 - (void)scopeTransitionDidUpdate:(UIPanGestureRecognizer *)panGesture
 {
     if (self.state != FSCalendarTransitionStateChanging) return;
-    
+
     FSCalendarTransitionAttributes *attr = self.transitionAttributes;
+
+    // 检测方向变化：如果当前sourceScope是Month，根据translationY重新确定targetScope
+    CGFloat translationY = [panGesture translationInView:panGesture.view].y;
+    printf("translationY: %f\n", translationY);  // 使用 printf 替代 NSLog
+    if (attr.sourceScope == FSCalendarScopeMonth) {
+        FSCalendarScope newTargetScope = attr.targetScope;
+
+        if (translationY < 0) {
+            // 往上滑，应该到Week
+            newTargetScope = FSCalendarScopeWeek;
+        } else if (translationY > 0 && [self.calendar canTransitionToMaxHeight]) {
+            // 往下滑，应该到MaxHeight
+            newTargetScope = FSCalendarScopeMaxHeight;
+        }
+
+        // 如果目标发生了变化，重新创建transitionAttributes
+        if (newTargetScope != attr.targetScope) {
+            self.transitionAttributes = [self createTransitionAttributesFromScope:attr.sourceScope toScope:newTargetScope];
+            attr = self.transitionAttributes;
+        }
+    }
+
     BOOL involvesMax = (attr.sourceScope == FSCalendarScopeMaxHeight || attr.targetScope == FSCalendarScopeMaxHeight);
     if (!involvesMax) {
         CGFloat translation = ABS([panGesture translationInView:panGesture.view].y);
@@ -188,7 +210,6 @@
         return;
     }
 
-    CGFloat translationY = [panGesture translationInView:panGesture.view].y;
     CGFloat deltaHeight = CGRectGetHeight(attr.targetBounds) - CGRectGetHeight(attr.sourceBounds);
     CGFloat direction = deltaHeight >= 0 ? 1.0f : -1.0f;
     CGFloat directedTranslation = translationY * direction;
@@ -197,8 +218,7 @@
     CGFloat progress = maxTranslation > 0.0f ? directedTranslation / maxTranslation : 0.0f;
     [self performAlphaAnimationWithProgress:progress];
     [self performPathAnimationWithProgress:progress];
-    printf("progress: %f\n", progress);  // 使用 printf 替代 NSLog
-    NSLog(@"progess:%lf",progress);
+    printf("progress: %f\n", progress);
 }
 
 - (void)scopeTransitionDidEnd:(UIPanGestureRecognizer *)panGesture

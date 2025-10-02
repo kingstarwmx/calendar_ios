@@ -485,7 +485,9 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
 }
 
 #pragma mark - <UICollectionViewDelegate>
-
+- (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView {
+    printf("");
+ }
 - (BOOL)collectionView:(UICollectionView *)collectionView shouldSelectItemAtIndexPath:(NSIndexPath *)indexPath
 {
     FSCalendarMonthPosition monthPosition = [self.calculator monthPositionForIndexPath:indexPath];

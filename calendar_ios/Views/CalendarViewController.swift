@@ -363,7 +363,7 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
         viewModel.setCurrentMonth(calendar.currentPage)
         updateMonthLabel(for: calendar.currentPage)
         print("📅 切换到月份: \(calendar.currentPage)")
-
+        
         // 延迟0.1秒后调整maxHeight，使用动画效果
         let fullCalendarH = DeviceHelper.screenHeight - DeviceHelper.navigationBarTotalHeight() - DeviceHelper.getBottomSafeAreaInset() - 54.0
         if calendar.numberOfRowsForCurrentMonth() == 5 {
@@ -371,9 +371,8 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
         } else {
             self.calendarView.maxHeight = fullCalendarH
         }
-
-        // 调用新的动画方法
-        calendar.transitionCoordinator.performMaxHeightExpansion(withDuration: 0.3)
+        
+        calendar.transitionCoordinator.performMaxHeightExpansion(withDuration: 0.5)
 
         Task {
             await viewModel.loadEvents(forceRefresh: true)
