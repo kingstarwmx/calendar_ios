@@ -331,7 +331,7 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
                     if (self.scope == FSCalendarScopeMaxHeight && self.transitionCoordinator.state == FSCalendarTransitionStateIdle) {
                         effectiveRowHeight = [self effectiveMaxRowHeight];
                     }
-                    CGFloat contentHeight = effectiveRowHeight*6 + padding*2;
+                    CGFloat contentHeight = effectiveRowHeight*currentRows + padding*2;
                     _daysContainer.frame = CGRectMake(0, headerHeight+weekdayHeight, self.fs_width, contentHeight);
                     _collectionView.frame = CGRectMake(0, 0, _daysContainer.fs_width, contentHeight);
                     break;
@@ -993,7 +993,8 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
         CGFloat contentHeight = self.transitionCoordinator.cachedMonthSize.height-headerHeight-weekdayHeight;
         CGFloat padding = 0;
         if (!self.floatingMode) {
-            _preferredRowHeight = (contentHeight-padding*2)/6.0;
+            NSInteger currentRows = [self.calculator numberOfRowsInMonth:self.currentPage];
+            _preferredRowHeight = (contentHeight-padding*2)/currentRows;
         } else {
             _preferredRowHeight = _rowHeight;
         }
@@ -1030,10 +1031,11 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
     CGFloat weekdayHeight = self.preferredWeekdayHeight;
     CGFloat contentHeight = cachedSize.height - headerHeight - weekdayHeight;
     CGFloat padding = 0;
+    NSInteger currentRows = [self.calculator numberOfRowsInMonth:self.currentPage];
     if (contentHeight <= 0) {
         return MAX(_rowHeight, FSCalendarStandardRowHeight);
     }
-    return (contentHeight - padding * 2.0f) / 6.0f;
+    return (contentHeight - padding * 2.0f) / currentRows;
 }
 
 - (CGFloat)effectiveMaxRowHeight
@@ -1041,8 +1043,9 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
     CGFloat baselineRow = [self baselineRowHeight];
     CGFloat headerHeight = self.preferredHeaderHeight;
     CGFloat weekdayHeight = self.preferredWeekdayHeight;
+    NSInteger currentRows = [self.calculator numberOfRowsInMonth:self.currentPage];
     CGFloat padding = self.collectionViewLayout.sectionInsets.top + self.collectionViewLayout.sectionInsets.bottom;
-    CGFloat baselineTotal = headerHeight + weekdayHeight + baselineRow * 6.0f + padding;
+    CGFloat baselineTotal = headerHeight + weekdayHeight + baselineRow * currentRows + padding;
     CGFloat targetTotal = _maxHeight > 0 ? MAX(_maxHeight, baselineTotal) : baselineTotal;
     CGFloat available = targetTotal - headerHeight - weekdayHeight - padding;
     if (available <= 0) {
@@ -1050,7 +1053,7 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
     }
     // 使用FSCalendarRound保持与FSCalendarSliceCake一致的精度
     // 四舍五入到0.5，避免与layout计算产生精度差异
-    return MAX(FSCalendarRound(available / 6.0f * 2) * 0.5, baselineRow);
+    return MAX(FSCalendarRound(available / currentRows * 2) * 0.5, baselineRow);
 }
 
 - (BOOL)canTransitionToMaxHeight
@@ -1263,10 +1266,11 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
 #pragma mark - Private methods
 - (CGFloat)getCurrentCellHeight{
 //    return self.collectionView.frame.size.height / 6.0;
+    NSInteger currentRows = [self.calculator numberOfRowsInMonth:self.currentPage];
     if (self.scope == FSCalendarScopeWeek) {
         return  self.collectionView.frame.size.height;
     } else {
-        return self.collectionView.frame.size.height / 6.0;
+        return self.collectionView.frame.size.height / currentRows;
     }
 }
 - (void)scrollToDate:(NSDate *)date

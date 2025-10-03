@@ -11,7 +11,7 @@ class MonthPageView: UIView {
         calendar.scrollEnabled = false  // 禁用左右滚动
         calendar.scope = .month
         calendar.firstWeekday = 1  // 周日开始
-        calendar.placeholderType = .fillSixRows
+        calendar.placeholderType = .fillHeadTail
         calendar.scrollDirection = .horizontal
         let maxHeight = DeviceHelper.screenHeight - DeviceHelper.navigationBarTotalHeight() - DeviceHelper.getBottomSafeAreaInset() - 54.0 - 30.0  // 30 是 weekdayLabel 高度
         calendar.maxHeight = maxHeight
