@@ -28,7 +28,7 @@ final class CalendarViewController: UIViewController {
         print("screenHeight: \(DeviceHelper.screenHeight)")
         print("navigationBarTotalHeight: \(DeviceHelper.navigationBarTotalHeight())")
         print("getBottomSafeAreaInset: \(DeviceHelper.getBottomSafeAreaInset())")
-        return DeviceHelper.screenHeight - DeviceHelper.navigationBarTotalHeight() - DeviceHelper.getBottomSafeAreaInset() - 54.0
+        return DeviceHelper.screenHeight - DeviceHelper.navigationBarTotalHeight() - DeviceHelper.getBottomSafeAreaInset() - 54.0 - 5.0
     }
 
     init(viewModel: EventViewModel? = nil) {
@@ -90,11 +90,11 @@ final class CalendarViewController: UIViewController {
         monthLabel.textColor = .label
 
         calendarView.headerHeight = 0
-        calendarView.weekdayHeight = 32
+        calendarView.weekdayHeight = 1  // 设置为极小值而不是 0，避免布局计算问题
         calendarView.scope = .month
         calendarView.placeholderType = .fillSixRows
         calendarView.clipsToBounds = false  // 允许tableView覆盖到日历区域
-        calendarView.appearance.weekdayTextColor = .secondaryLabel
+        calendarView.appearance.weekdayTextColor = .clear  // 设置为透明色隐藏文字
         calendarView.appearance.titleFont = UIFont.systemFont(ofSize: 16, weight: .medium)
         calendarView.appearance.subtitleFont = UIFont.systemFont(ofSize: 12)
         calendarView.appearance.selectionColor = .systemBlue
@@ -419,7 +419,7 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
             self.calendarView.maxHeight = fullCalendarHeight
         }
 
-        calendar.transitionCoordinator.performMaxHeightExpansion(withDuration: 0.2)
+        calendar.transitionCoordinator.performMaxHeightExpansion(withDuration: 0.3)
     }
 
     func calendar(_ calendar: FSCalendar, boundingRectWillChange bounds: CGRect, animated: Bool) {
