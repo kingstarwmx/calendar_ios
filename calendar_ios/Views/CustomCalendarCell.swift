@@ -101,7 +101,7 @@ class CustomCalendarCell: FSCalendarCell {
 
         // 更新 shapeLayer 的路径
         let cornerRadius: CGFloat = 8
-        let bounds = contentView.bounds.insetBy(dx: 2, dy: 2)
+        let bounds = contentView.bounds.insetBy(dx: 0, dy: 0)
         let path = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius)
 
         selectedShapeLayer.path = path.cgPath

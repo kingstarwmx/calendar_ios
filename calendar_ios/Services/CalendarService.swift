@@ -3,20 +3,13 @@ import EventKit
 import UIKit
 
 actor CalendarService {
-    private let database: DatabaseHelper
     private let deviceService: DeviceCalendarService
 
     private var cachedEvents: [Event] = []
     private var cachedRange: DateInterval?
-    private var includeDeviceEvents = false
 
-    init(database: DatabaseHelper = .shared, deviceService: DeviceCalendarService = DeviceCalendarService()) {
-        self.database = database
+    init(deviceService: DeviceCalendarService = DeviceCalendarService()) {
         self.deviceService = deviceService
-    }
-
-    func configureDeviceSync(enabled: Bool) {
-        includeDeviceEvents = enabled
     }
 
     func requestDevicePermission() async -> Bool {
@@ -39,36 +32,32 @@ actor CalendarService {
         deviceService.permissionStatus
     }
 
+    /// 加载所有事件（从 EventKit）
     func loadAllEvents(range: DateInterval? = nil) async -> [Event] {
-        let events = await database.fetchAllEvents()
-        var merged = events
+        let effectiveRange = range ?? defaultRange(for: Date())
 
-        if includeDeviceEvents {
-            let deviceRange = range ?? defaultRange(for: Date())
-            if let deviceEvents = try? await deviceService.fetchDeviceEvents(in: deviceRange) {
-                merged = merge(events: events, deviceEvents: deviceEvents)
-            }
+        // 直接从设备日历获取所有事件
+        if let events = try? await deviceService.fetchDeviceEvents(in: effectiveRange) {
+            cachedEvents = events
+            cachedRange = effectiveRange
+            return events
         }
 
-        cachedEvents = merged
-        cachedRange = range
-        return merged
+        return []
     }
 
+    /// 获取指定日期的事件
     func events(on date: Date) async -> [Event] {
-        let localEvents = await database.fetchEvents(for: date)
-        var combined = localEvents
+        let range = DateInterval(start: date.startOfDay, end: date.endOfDay)
 
-        if includeDeviceEvents {
-            let range = DateInterval(start: date.startOfDay, end: date.endOfDay)
-            if let deviceEvents = try? await deviceService.fetchDeviceEvents(in: range) {
-                combined = merge(events: localEvents, deviceEvents: deviceEvents)
-            }
+        if let events = try? await deviceService.fetchDeviceEvents(in: range) {
+            return events.sorted(by: chronologicalSort)
         }
 
-        return combined.sorted(by: chronologicalSort)
+        return []
     }
 
+    /// 刷新事件
     func refresh(range: DateInterval? = nil) async -> [Event] {
         await loadAllEvents(range: range)
     }
@@ -77,36 +66,27 @@ actor CalendarService {
         cachedEvents
     }
 
-    func saveLocalEvent(_ event: Event) async throws {
-        try await database.saveEvent(event)
+    /// 创建新事件（直接保存到 EventKit）
+    func createEvent(_ event: Event) async throws -> Event {
+        return try await deviceService.createEvent(event)
     }
 
-    func updateLocalEvent(_ event: Event) async throws {
-        try await database.updateEvent(event)
+    /// 更新事件（直接更新到 EventKit）
+    func updateEvent(_ event: Event) async throws -> Event {
+        return try await deviceService.updateEvent(event)
     }
 
-    func deleteLocalEvent(id: String) async throws {
-        try await database.deleteEvent(id: id)
+    /// 删除事件（直接从 EventKit 删除）
+    func deleteEvent(id: String) async throws {
+        try await deviceService.deleteEvent(eventId: id)
     }
 
-    func syncToDeviceCalendar(_ event: Event) async throws -> Event {
-        let identifier = try await deviceService.syncToDeviceCalendar(event)
-        return event.copy(isFromDeviceCalendar: true, deviceEventId: identifier)
-    }
-
-    func removeFromDeviceCalendar(event: Event) async {
-        guard let id = event.deviceEventId else { return }
-        _ = try? await deviceService.removeFromDeviceCalendar(eventId: id)
+    /// 打印所有日历信息（调试用）
+    func printAllCalendars() async {
+        await deviceService.printAllCalendars()
     }
 
     // MARK: - Helpers
-
-    private func merge(events: [Event], deviceEvents: [Event]) -> [Event] {
-        var combined: [String: Event] = [:]
-        for event in events { combined[event.id] = event }
-        for deviceEvent in deviceEvents { combined[deviceEvent.id] = deviceEvent }
-        return combined.values.sorted(by: chronologicalSort)
-    }
 
     private func chronologicalSort(_ lhs: Event, _ rhs: Event) -> Bool {
         if lhs.startDate == rhs.startDate {
@@ -117,9 +97,10 @@ actor CalendarService {
 
     private func defaultRange(for date: Date) -> DateInterval {
         let calendar = Calendar.current
-        let start = calendar.date(byAdding: .day, value: -30, to: date.startOfDay) ?? date.startOfDay
-        let end = calendar.date(byAdding: .day, value: 90, to: date.endOfDay) ?? date.endOfDay
-        return DateInterval(start: start, end: end)
+        // 默认加载前后各两个月（共5个月）的数据
+        let start = calendar.date(byAdding: .month, value: -2, to: date.startOfDay) ?? date.startOfDay
+        let end = calendar.date(byAdding: .month, value: 2, to: date.endOfDay) ?? date.endOfDay
+        return DateInterval(start: start.startOfMonth, end: end.endOfMonth)
     }
 }
 
@@ -147,5 +128,20 @@ private extension Date {
     var endOfDay: Date {
         let start = startOfDay
         return Calendar.current.date(byAdding: DateComponents(day: 1, second: -1), to: start) ?? self
+    }
+
+    var startOfMonth: Date {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month], from: self)
+        return calendar.date(from: components) ?? self
+    }
+
+    var endOfMonth: Date {
+        let calendar = Calendar.current
+        if let range = calendar.range(of: .day, in: .month, for: self),
+           let start = calendar.date(from: calendar.dateComponents([.year, .month], from: self)) {
+            return calendar.date(byAdding: DateComponents(day: range.count, second: -1), to: start) ?? self
+        }
+        return self
     }
 }

@@ -179,67 +179,6 @@ final class Event: Identifiable, Hashable, Codable {
         try container.encode(deviceEventId, forKey: .deviceEventId)
     }
 
-    // MARK: - Core Data bridging
-
-    convenience init?(entity: EventEntity) {
-        guard let id = entity.id,
-              let title = entity.title,
-              let startDate = entity.startDate,
-              let endDate = entity.endDate,
-              let calendarId = entity.calendarId else {
-            return nil
-        }
-
-        let reminders: [Date]
-        if let remindersData = entity.remindersData {
-            reminders = (try? JSONDecoder().decode([Date].self, from: remindersData)) ?? []
-        } else {
-            reminders = []
-        }
-
-        let customColor = entity.customColorHex.flatMap { UIColor(hexString: $0) }
-
-        self.init(
-            id: id,
-            title: title,
-            startDate: startDate,
-            endDate: endDate,
-            isAllDay: entity.isAllDay,
-            location: entity.location ?? "",
-            calendarId: calendarId,
-            description: entity.eventDescription,
-            customColor: customColor,
-            recurrenceRule: entity.recurrenceRule,
-            reminders: reminders,
-            url: entity.url,
-            calendarName: entity.calendarName,
-            isFromDeviceCalendar: entity.isFromDeviceCalendar,
-            deviceEventId: entity.deviceEventId
-        )
-    }
-
-    func apply(to entity: EventEntity) {
-        entity.id = id
-        entity.title = title
-        entity.startDate = startDate
-        entity.endDate = endDate
-        entity.isAllDay = isAllDay
-        entity.location = location
-        entity.calendarId = calendarId
-        entity.eventDescription = description
-        entity.customColorHex = customColor?.toHexString(includeAlpha: true)
-        entity.recurrenceRule = recurrenceRule
-        entity.remindersData = try? JSONEncoder().encode(reminders)
-        entity.url = url
-        entity.calendarName = calendarName
-        entity.isFromDeviceCalendar = isFromDeviceCalendar
-        entity.deviceEventId = deviceEventId
-        entity.updatedAt = Date()
-        if entity.createdAt == nil {
-            entity.createdAt = Date()
-        }
-    }
-
     // MARK: - Hashable
 
     static func == (lhs: Event, rhs: Event) -> Bool {

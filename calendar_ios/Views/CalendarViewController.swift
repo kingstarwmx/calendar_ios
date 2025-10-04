@@ -80,10 +80,23 @@ final class CalendarViewController: UIViewController {
     }
 
     private func loadInitialData() {
-        print("🔐 请求设备日历访问权限...")
+        // print("🔐 请求设备日历访问权限...")
 
-        viewModel.requestDeviceCalendarAccess {
-            print("✅ 数据加载完成")
+        // 计算五个月的日期范围（前两个月到后两个月）
+        let calendar = Calendar.current
+        let today = Date()
+
+        guard let startOfTwoMonthsAgo = calendar.date(byAdding: .month, value: -2, to: today)?.startOfMonth,
+              let endOfTwoMonthsLater = calendar.date(byAdding: .month, value: 2, to: today)?.endOfMonth else {
+            return
+        }
+
+        let fiveMonthRange = DateInterval(start: startOfTwoMonthsAgo, end: endOfTwoMonthsLater)
+
+        // 只调用一次，requestDeviceCalendarAccess 内部会自动加载事件
+        // 但需要修改 requestDeviceCalendarAccess 来支持传入 dateRange
+        viewModel.requestDeviceCalendarAccessWithRange(dateRange: fiveMonthRange) {
+            // print("✅ 数据加载完成")
         }
     }
 
@@ -127,21 +140,40 @@ final class CalendarViewController: UIViewController {
     /// 设置三个月份页面视图
     private func setupMonthPages() {
         let screenWidth = DeviceHelper.screenWidth
+        let calendar = Calendar.current
+        let today = Date()
 
-        // 创建三个 MonthPageView
+        // 创建三个 MonthPageView 和对应的 ViewModel
         for i in 0..<3 {
+            // 计算月份（-1, 0, +1）
+            let monthOffset = currentMonthOffset + i - 1
+            let month = calendar.date(byAdding: .month, value: monthOffset, to: today)!
+
+            // 创建 ViewModel（先不设置事件，等数据加载完成后再设置）
+            let viewModel = MonthPageViewModel(month: month, selectedDate: getSelectedDateForMonth(month))
+
+            // 创建 View
             let pageView = MonthPageView()
-            pageView.calendarView.delegate = self
-            pageView.calendarView.dataSource = self
-            pageView.tableView.delegate = self
-            pageView.tableView.dataSource = self
-            pageView.tableView.register(EventListCell.self, forCellReuseIdentifier: EventListCell.reuseIdentifier)
 
-            // 注册自定义 cell
-            pageView.calendarView.register(CustomCalendarCell.self, forCellReuseIdentifier: "CustomCell")
+            // 配置 View 和 ViewModel
+            pageView.configure(with: viewModel)
 
-            // 设置 maxHeight
-            
+            // 设置回调
+            pageView.onDateSelected = { [weak self] date in
+                self?.handleDateSelection(date)
+            }
+
+            pageView.onEventSelected = { [weak self] event in
+                self?.handleEventSelection(event)
+            }
+
+            pageView.onCalendarScopeChanged = { [weak self] scope in
+                self?.handleCalendarScopeChange(scope)
+            }
+
+            pageView.onCalendarHeightChanged = { [weak self] height in
+                self?.handleCalendarHeightChange(height)
+            }
 
             // 设置手势处理
             setupPageViewGesture(for: pageView)
@@ -160,8 +192,7 @@ final class CalendarViewController: UIViewController {
         // 初始显示中间页（当前月）
         monthScrollView.contentOffset = CGPoint(x: screenWidth, y: 0)
 
-        // 配置初始月份数据
-        updateMonthPagesData()
+        // 不立即更新数据，等待数据加载完成
     }
 
     /// 为每个 pageView 设置手势处理
@@ -188,24 +219,45 @@ final class CalendarViewController: UIViewController {
             calendar.date(byAdding: .month, value: currentMonthOffset + 1, to: today)!
         ]
 
-        // 先配置所有页面和选中状态
+        // 为每个页面更新 ViewModel
         for (index, pageView) in monthPageViews.enumerated() {
             let month = months[index]
+
+            // 获取该月份视图实际显示的日期范围（包括前后月的占位日期）
+            let firstDayOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: month))!
+            let weekday = calendar.component(.weekday, from: firstDayOfMonth)
+
+            // 计算实际显示的起始日期（可能是上个月的日期）
+            let daysToSubtract = weekday - 1  // 因为周日是1
+            let displayStartDate = calendar.date(byAdding: .day, value: -daysToSubtract, to: firstDayOfMonth)!
+
+            // 计算实际显示的结束日期（6周 * 7天 = 42天）
+            let displayEndDate = calendar.date(byAdding: .day, value: 41, to: displayStartDate)!
+
+            // 获取这个显示范围内的所有事件
             let events = viewModel.events.filter { event in
-                calendar.isDate(event.startDate, equalTo: month, toGranularity: .month)
+                let eventStart = calendar.startOfDay(for: event.startDate)
+                let eventEnd = calendar.startOfDay(for: event.endDate)
+                return eventEnd >= displayStartDate && eventStart <= displayEndDate
             }
 
-            // 配置月份和数据
-            pageView.configure(month: month, events: events)
+            // 获取或创建 ViewModel
+            if let existingViewModel = pageView.viewModel {
+                // 更新现有 ViewModel（configure 方法内部会检查是否真的需要更新）
+                existingViewModel.configure(month: month, events: events)
 
-            // 为每个月份选中对应的日期（立即选中，不等待切换）
-            let selectedDate = getSelectedDateForMonth(month)
-            pageView.calendarView.select(selectedDate, scrollToDate: false)
-
-            // 刷新日历以显示选中状态
-            pageView.calendarView.reloadData()
-
-            print("🗓️ 配置月份: \(getMonthKey(for: month)), 选中日期: \(selectedDate)")
+                // 只在日期真的改变时更新选中日期
+                let selectedDate = getSelectedDateForMonth(month)
+                if !calendar.isDate(existingViewModel.selectedDate, inSameDayAs: selectedDate) {
+                    existingViewModel.selectDate(selectedDate)
+                }
+            } else {
+                // 创建新的 ViewModel（用于页面回收后）
+                let selectedDate = getSelectedDateForMonth(month)
+                let newViewModel = MonthPageViewModel(month: month, selectedDate: selectedDate)
+                newViewModel.configure(month: month, events: events)
+                pageView.configure(with: newViewModel)
+            }
         }
 
         // 更新月份标签
@@ -215,8 +267,43 @@ final class CalendarViewController: UIViewController {
         // 获取当前月应该选中的日期
         let currentSelectedDate = getSelectedDateForMonth(currentMonth)
 
-        // 更新 viewModel 的选中日期（用于 tableView）
-        viewModel.selectedDate = currentSelectedDate
+        // 只在日期真的改变时更新
+        if !calendar.isDate(viewModel.selectedDate, inSameDayAs: currentSelectedDate) {
+            viewModel.selectedDate = currentSelectedDate
+        }
+    }
+
+    // MARK: - MonthPageView Callbacks
+
+    /// 处理日期选择
+    private func handleDateSelection(_ date: Date) {
+        // print("📆 选中日期: \(date)")
+
+        // 保存用户选中的日期
+        saveSelectedDate(date)
+
+        // 更新 viewModel 的选中日期（用于工具栏）
+        viewModel.selectedDate = date
+    }
+
+    /// 处理事件选择
+    private func handleEventSelection(_ event: Event) {
+        // print("📝 选中事件: \(event.title)")
+
+        // TODO: 显示事件详情或编辑页面
+        let alert = UIAlertController(title: event.title, message: event.description ?? "无描述", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "确定", style: .default))
+        present(alert, animated: true)
+    }
+
+    /// 处理日历范围变化
+    private func handleCalendarScopeChange(_ scope: FSCalendarScope) {
+        // print("📏 日历范围变化: \(scope)")
+    }
+
+    /// 处理日历高度变化
+    private func handleCalendarHeightChange(_ height: CGFloat) {
+        // 高度变化已在 MonthPageView 内部处理
     }
 
     /// 获取指定月份应该选中的日期
@@ -267,7 +354,7 @@ final class CalendarViewController: UIViewController {
                 guard let self = self else { return }
                 // 刷新所有月份页面的数据
                 self.updateMonthPagesData()
-                print("🔄 日历数据已刷新")
+                // print("🔄 日历数据已刷新")
             }
             .store(in: &cancellables)
 
@@ -278,9 +365,6 @@ final class CalendarViewController: UIViewController {
 
                 // 更新工具栏提示语
                 self.inputToolbar.selectedDate = date
-
-                // 刷新当前显示的 tableView
-                self.getCurrentMonthPageView()?.tableView.reloadData()
             }
             .store(in: &cancellables)
     }
@@ -373,76 +457,58 @@ final class CalendarViewController: UIViewController {
         let controller = AddEventViewController()
         controller.onSave = { [weak self] event in
             guard let self else { return }
-            Task { await self.viewModel.addEvent(event, syncToDevice: self.viewModel.deviceCalendarEnabled) }
+            Task { await self.viewModel.addEvent(event) }
         }
         let nav = UINavigationController(rootViewController: controller)
         present(nav, animated: true)
     }
 
     @objc private func settingsTapped() {
-        let alert = UIAlertController(title: "设备日历", message: "是否同步设备日历事件?", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-        alert.addAction(UIAlertAction(title: "不同步", style: .default, handler: { [weak self] _ in
-            Task { await self?.viewModel.setDeviceSync(enabled: false) }
+        let alert = UIAlertController(title: "日历设置", message: "选择一个选项", preferredStyle: .actionSheet)
+
+        // 设备日历同步选项
+        alert.addAction(UIAlertAction(title: "设备日历同步", style: .default, handler: { [weak self] _ in
+            self?.showDeviceSyncOptions()
         }))
-        alert.addAction(UIAlertAction(title: "同步", style: .default, handler: { [weak self] _ in
+
+        // 订阅节假日日历
+        alert.addAction(UIAlertAction(title: "订阅节假日日历", style: .default, handler: { [weak self] _ in
+            self?.showHolidayCalendarGuide()
+        }))
+
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func showDeviceSyncOptions() {
+        let alert = UIAlertController(title: "日历权限", message: "应用需要访问系统日历来保存和显示事件", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "授权", style: .default, handler: { [weak self] _ in
             Task { await self?.viewModel.requestDeviceCalendarAccess() }
         }))
         present(alert, animated: true)
     }
-}
 
-@MainActor
-extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCalendarDelegateAppearance {
-    func calendar(_ calendar: FSCalendar, cellFor date: Date, at position: FSCalendarMonthPosition) -> FSCalendarCell {
-        let cell = calendar.dequeueReusableCell(withIdentifier: "CustomCell", for: date, at: position) as! CustomCalendarCell
+    private func showHolidayCalendarGuide() {
+        let message = """
+        订阅节假日日历步骤：
 
-        let events = viewModel.getEvents(for: date)
+        1. 打开系统「设置」应用
+        2. 选择「日历」→「账户」
+        3. 点击「添加账户」→「其他」
+        4. 选择「添加已订阅的日历」
+        5. 输入节假日日历地址
 
-        // 只配置数据，样式由 configureAppearance 自动处理
-        cell.configure(with: date, events: events)
+        推荐日历：
+        • 中国节假日（包含调休信息）
+        • Apple 官方节假日日历
 
-        return cell
-    }
+        订阅后，节假日将自动显示在本应用中。
+        """
 
-    func calendar(_ calendar: FSCalendar, numberOfEventsFor date: Date) -> Int {
-        // 返回 0，因为我们使用自定义 cell 来显示事件
-        return 0
-    }
-
-    func calendar(_ calendar: FSCalendar, didSelect date: Date, at monthPosition: FSCalendarMonthPosition) {
-        print("📆 选中日期: \(date)")
-
-        // 保存用户选中的日期
-        saveSelectedDate(date)
-
-        // 更新 viewModel 的选中日期
-        viewModel.selectedDate = date
-
-        // 刷新所有日历以更新选中状态
-        for pageView in monthPageViews {
-            pageView.calendarView.reloadData()
-        }
-
-        // 获取并打印选中日期的事件
-        let events = viewModel.getEvents(for: date)
-        print("   当天事件数: \(events.count)")
-        for event in events {
-            print("   - \(event.title) (\(event.isAllDay ? "全天" : "定时"))")
-        }
-    }
-
-    func calendar(_ calendar: FSCalendar, boundingRectWillChange bounds: CGRect, animated: Bool) {
-        // 找到对应的 pageView 并更新其日历高度
-        if let pageView = monthPageViews.first(where: { $0.calendarView == calendar }) {
-            pageView.updateCalendarHeight(bounds.height)
-
-            if animated {
-                UIView.animate(withDuration: 0.3) {
-                    pageView.layoutIfNeeded()
-                }
-            }
-        }
+        let alert = UIAlertController(title: "订阅节假日日历", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "知道了", style: .default))
+        present(alert, animated: true)
     }
 }
 
@@ -536,12 +602,12 @@ extension CalendarViewController: UIScrollViewDelegate {
 
         if offsetX <= 0 {
             // 滑到最左边，查看前一个月
-            print("📅 切换到前一个月")
+            // print("📅 切换到前一个月")
             currentMonthOffset -= 1
             resetScrollViewPosition(direction: .left)
         } else if offsetX >= screenWidth * 2 {
             // 滑到最右边，查看后一个月
-            print("📅 切换到后一个月")
+            // print("📅 切换到后一个月")
             currentMonthOffset += 1
             resetScrollViewPosition(direction: .right)
         }
@@ -561,10 +627,48 @@ extension CalendarViewController: UIScrollViewDelegate {
             // 向左滑动：右边视图移到左边（变成前前一个月）
             let rightView = monthPageViews.removeLast()
             monthPageViews.insert(rightView, at: 0)
+
+            // 为新的左边页面创建新的 ViewModel
+            let newMonth = calendar.date(byAdding: .month, value: currentMonthOffset - 2, to: today)!
+            let newViewModel = MonthPageViewModel(month: newMonth, selectedDate: getSelectedDateForMonth(newMonth))
+            rightView.configure(with: newViewModel)
+
+            // 更新回调
+            rightView.onDateSelected = { [weak self] date in
+                self?.handleDateSelection(date)
+            }
+            rightView.onEventSelected = { [weak self] event in
+                self?.handleEventSelection(event)
+            }
+            rightView.onCalendarScopeChanged = { [weak self] scope in
+                self?.handleCalendarScopeChange(scope)
+            }
+            rightView.onCalendarHeightChanged = { [weak self] height in
+                self?.handleCalendarHeightChange(height)
+            }
         } else {
             // 向右滑动：左边视图移到右边（变成后后一个月）
             let leftView = monthPageViews.removeFirst()
             monthPageViews.append(leftView)
+
+            // 为新的右边页面创建新的 ViewModel
+            let newMonth = calendar.date(byAdding: .month, value: currentMonthOffset + 2, to: today)!
+            let newViewModel = MonthPageViewModel(month: newMonth, selectedDate: getSelectedDateForMonth(newMonth))
+            leftView.configure(with: newViewModel)
+
+            // 更新回调
+            leftView.onDateSelected = { [weak self] date in
+                self?.handleDateSelection(date)
+            }
+            leftView.onEventSelected = { [weak self] event in
+                self?.handleEventSelection(event)
+            }
+            leftView.onCalendarScopeChanged = { [weak self] scope in
+                self?.handleCalendarScopeChange(scope)
+            }
+            leftView.onCalendarHeightChanged = { [weak self] height in
+                self?.handleCalendarHeightChange(height)
+            }
         }
 
         // 重新布局页面位置
@@ -578,8 +682,15 @@ extension CalendarViewController: UIScrollViewDelegate {
         // 重置 contentOffset 到中间位置（不带动画）
         monthScrollView.setContentOffset(CGPoint(x: screenWidth, y: 0), animated: false)
 
-        // 加载新月份的数据
-        viewModel.loadEvents(forceRefresh: true)
+        // 计算五个月的日期范围并加载数据（当前月份的前后各两个月）
+        guard let startMonth = calendar.date(byAdding: .month, value: currentMonthOffset - 2, to: today),
+              let endMonth = calendar.date(byAdding: .month, value: currentMonthOffset + 2, to: today) else {
+            isResettingScrollView = false
+            return
+        }
+
+        let fiveMonthRange = DateInterval(start: startMonth.startOfMonth, end: endMonth.endOfMonth)
+        viewModel.loadEvents(forceRefresh: true, dateRange: fiveMonthRange)
 
         isResettingScrollView = false
     }
@@ -591,35 +702,27 @@ extension CalendarViewController: UIScrollViewDelegate {
     }
 }
 
-extension CalendarViewController: UITableViewDataSource, UITableViewDelegate {
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return viewModel.getEvents(for: viewModel.selectedDate).count
-    }
-
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        guard let cell = tableView.dequeueReusableCell(withIdentifier: EventListCell.reuseIdentifier, for: indexPath) as? EventListCell else {
-            return UITableViewCell()
-        }
-        let events = viewModel.getEvents(for: viewModel.selectedDate)
-        print("🔍 当前选中日期: \(viewModel.selectedDate.formatted())")
-        // 添加边界检查，防止数组越界
-        guard indexPath.row < events.count else {
-            print("⚠️ TableView 索引越界: indexPath.row=\(indexPath.row), events.count=\(events.count)")
-            return cell
-        }
-
-        cell.configure(with: events[indexPath.row])
-        return cell
-    }
-
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-    }
-}
-
 // MARK: - Array Safe Index Extension
 extension Array {
     subscript(safe index: Index) -> Element? {
         return indices.contains(index) ? self[index] : nil
+    }
+}
+
+// MARK: - Date Extension
+private extension Date {
+    var startOfMonth: Date {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month], from: self)
+        return calendar.date(from: components) ?? self
+    }
+
+    var endOfMonth: Date {
+        let calendar = Calendar.current
+        if let range = calendar.range(of: .day, in: .month, for: self),
+           let start = calendar.date(from: calendar.dateComponents([.year, .month], from: self)) {
+            return calendar.date(byAdding: DateComponents(day: range.count, second: -1), to: start) ?? self
+        }
+        return self
     }
 }
