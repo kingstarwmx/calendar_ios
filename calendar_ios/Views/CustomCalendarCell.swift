@@ -1,6 +1,13 @@
 import UIKit
 import SnapKit
 
+/// 事件位置信息
+struct EventPosition {
+    let isStart: Bool
+    let isMiddle: Bool
+    let isEnd: Bool
+}
+
 /// 自定义日历单元格
 /// 参考 Flutter 版本的 CalendarCell 布局
 class CustomCalendarCell: FSCalendarCell {
@@ -87,8 +94,7 @@ class CustomCalendarCell: FSCalendarCell {
 
         eventsStackView.snp.makeConstraints { make in
             make.top.equalTo(customTitleLabel.snp.bottom)
-            make.leading.equalToSuperview().offset(2)
-            make.trailing.equalToSuperview().offset(-2)
+            make.leading.trailing.equalToSuperview()  // 移除内边距，让事件条可以延伸到边缘
         }
     }
 
@@ -165,25 +171,31 @@ class CustomCalendarCell: FSCalendarCell {
 
         guard !events.isEmpty else { return }
 
+        // 为每个事件添加位置信息
+        let eventsWithPosition = events.map { event -> (event: Event, position: EventPosition) in
+            let position = getEventPosition(for: event, on: date)
+            return (event: event, position: position)
+        }
+
         // 排序：多天事件优先，然后按时间排序
-        let sortedEvents = events.sorted { event1, event2 in
-            let isMultiDay1 = isMultiDayEvent(event1)
-            let isMultiDay2 = isMultiDayEvent(event2)
+        let sortedEvents = eventsWithPosition.sorted { item1, item2 in
+            let isMultiDay1 = isMultiDayEvent(item1.event)
+            let isMultiDay2 = isMultiDayEvent(item2.event)
 
             if isMultiDay1 && !isMultiDay2 {
                 return true
             } else if !isMultiDay1 && isMultiDay2 {
                 return false
             } else {
-                return event1.startDate < event2.startDate
+                return item1.event.startDate < item2.event.startDate
             }
         }
 
         // 显示前几个事件
         let displayCount = min(sortedEvents.count, maxEventCount)
         for i in 0..<displayCount {
-            let event = sortedEvents[i]
-            let eventBar = createEventBar(for: event, date: date)
+            let item = sortedEvents[i]
+            let eventBar = createEventBar(for: item.event, date: date, position: item.position)
             eventsStackView.addArrangedSubview(eventBar)
         }
 
@@ -196,7 +208,7 @@ class CustomCalendarCell: FSCalendarCell {
     }
 
     /// 创建事件条
-    private func createEventBar(for event: Event, date: Date) -> UIView {
+    private func createEventBar(for event: Event, date: Date, position: EventPosition) -> UIView {
         let container = UIView()
         container.snp.makeConstraints { make in
             make.height.equalTo(14)
@@ -205,50 +217,62 @@ class CustomCalendarCell: FSCalendarCell {
         let eventColor = event.customColor ?? .systemBlue
         let calendar = Calendar.current
         let currentDate = calendar.startOfDay(for: date)
-        let eventStart = calendar.startOfDay(for: event.startDate)
-        let eventEnd = calendar.startOfDay(for: event.endDate)
 
-        let isStart = currentDate == eventStart
-        let isEnd = currentDate == eventEnd
-        let isMiddle = currentDate > eventStart && currentDate < eventEnd
+        // 判断是否为真正的多天事件
         let isSingleDay = !isMultiDayEvent(event)
 
-        // 判断是否延伸到边缘
-        let shouldExtendToEdges = !isSingleDay && (isMiddle || (isStart && !isEnd) || (isEnd && !isStart))
+        // 判断是否延伸到边缘（连续事件的中间部分或开始/结束的连接部分）
+        let shouldExtendToEdges = !isSingleDay && (position.isMiddle ||
+                                                   (position.isStart && !position.isEnd) ||
+                                                   (position.isEnd && !position.isStart))
+
+        // 调试国庆节事件
+        if event.title.contains("国庆") {
+            print("🎨 创建国庆节事件条:")
+            print("   日期: \(currentDate)")
+            print("   isSingleDay: \(isSingleDay)")
+            print("   position: start=\(position.isStart), middle=\(position.isMiddle), end=\(position.isEnd)")
+            print("   shouldExtendToEdges: \(shouldExtendToEdges)")
+        }
 
         let eventBar = UIView()
         eventBar.backgroundColor = eventColor.withAlphaComponent(0.9)
         container.addSubview(eventBar)
 
         if shouldExtendToEdges {
-            // 延伸到边缘：左右无内边距
+            // 延伸到边缘：左右完全延伸，无内边距
             eventBar.snp.makeConstraints { make in
                 make.top.equalToSuperview()
                 make.bottom.equalToSuperview()
-                make.leading.trailing.equalToSuperview()
+                make.leading.equalToSuperview()  // 完全延伸到左边缘
+                make.trailing.equalToSuperview()  // 完全延伸到右边缘
             }
 
-            // 设置圆角
+            // 设置圆角：根据位置决定哪边有圆角
             eventBar.layer.cornerRadius = 2
             eventBar.layer.maskedCorners = []
-            if isStart {
+            if position.isStart {
+                // 开始位置：左边有圆角
                 eventBar.layer.maskedCorners.insert([.layerMinXMinYCorner, .layerMinXMaxYCorner])
             }
-            if isEnd {
+            if position.isEnd {
+                // 结束位置：右边有圆角
                 eventBar.layer.maskedCorners.insert([.layerMaxXMinYCorner, .layerMaxXMaxYCorner])
             }
+            // 中间位置：没有圆角
         } else {
-            // 单天事件：左右有内边距
+            // 单天事件：有内边距和四周圆角
             eventBar.snp.makeConstraints { make in
                 make.top.equalToSuperview()
                 make.bottom.equalToSuperview()
-                make.leading.trailing.equalToSuperview()
+                make.leading.equalToSuperview().offset(2)  // 单天事件有内边距
+                make.trailing.equalToSuperview().offset(-2)  // 单天事件有内边距
             }
             eventBar.layer.cornerRadius = 2
         }
 
-        // 判断是否显示文字
-        let shouldShowText = shouldShowEventText(event: event, date: date, isStart: isStart)
+        // 判断是否显示文字：基于位置信息
+        let shouldShowText = shouldShowEventText(event: event, date: date, position: position)
 
         if shouldShowText {
             let label = UILabel()
@@ -284,7 +308,8 @@ class CustomCalendarCell: FSCalendarCell {
         indicator.snp.makeConstraints { make in
             make.top.equalToSuperview()
             make.bottom.equalToSuperview()
-            make.leading.trailing.equalToSuperview()
+            make.leading.equalToSuperview().offset(2)  // 溢出指示器有内边距
+            make.trailing.equalToSuperview().offset(-2)  // 溢出指示器有内边距
         }
 
         let label = UILabel()
@@ -303,40 +328,67 @@ class CustomCalendarCell: FSCalendarCell {
 
     /// 判断是否为多天事件
     private func isMultiDayEvent(_ event: Event) -> Bool {
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: event.startDate)
-        let end = calendar.startOfDay(for: event.endDate)
-        return start != end
+        // 对于全天事件，需要特殊处理
+        if event.isAllDay {
+            let calendar = Calendar.current
+            // 对于全天事件，直接比较日期组件，避免时区问题
+            let startComponents = calendar.dateComponents([.year, .month, .day], from: event.startDate)
+            let endComponents = calendar.dateComponents([.year, .month, .day], from: event.endDate)
+
+            let isMultiDay = startComponents.year != endComponents.year ||
+                             startComponents.month != endComponents.month ||
+                             startComponents.day != endComponents.day
+
+            if event.title.contains("国庆") {
+                print("🔍 isMultiDayEvent 判断(全天事件):")
+                print("   事件: \(event.title)")
+                print("   开始日期组件: \(startComponents.year!)-\(startComponents.month!)-\(startComponents.day!)")
+                print("   结束日期组件: \(endComponents.year!)-\(endComponents.month!)-\(endComponents.day!)")
+                print("   是否多天: \(isMultiDay)")
+            }
+
+            return isMultiDay
+        } else {
+            // 非全天事件，使用原有逻辑
+            let calendar = Calendar.current
+            let start = calendar.startOfDay(for: event.startDate)
+            let end = calendar.startOfDay(for: event.endDate)
+            return start != end
+        }
     }
 
     /// 判断是否应该显示事件文字
-    private func shouldShowEventText(event: Event, date: Date, isStart: Bool) -> Bool {
+    private func shouldShowEventText(event: Event, date: Date, position: EventPosition) -> Bool {
         // 单天事件总是显示文字
         if !isMultiDayEvent(event) {
             return true
         }
 
-        // 多天事件：在开始日期或每周开始（周日）显示
+        // 多天事件：在以下情况显示文字
+        // 1. 事件的开始日期
+        // 2. 每周的开始（周日）且在事件范围内
         let calendar = Calendar.current
         let currentDate = calendar.startOfDay(for: date)
         let eventStart = calendar.startOfDay(for: event.startDate)
         let eventEnd = calendar.startOfDay(for: event.endDate)
 
-        if currentDate == eventStart {
+        // 如果是事件开始日期，显示文字
+        if position.isStart {
             return true
         }
 
+        // 如果是周日（weekday == 1）且在事件范围内，显示文字
         let weekday = calendar.component(.weekday, from: date)
         let isInEventRange = currentDate >= eventStart && currentDate <= eventEnd
 
-        if weekday == 1 && isInEventRange { // 周日
+        if weekday == 1 && isInEventRange {
             return true
         }
 
         return false
     }
 
-    /// 根据背景色获取合适的文字颜色
+    /// 获取根据背景色获取合适的文字颜色
     private func getTextColor(for backgroundColor: UIColor) -> UIColor {
         var red: CGFloat = 0
         var green: CGFloat = 0
@@ -347,5 +399,67 @@ class CustomCalendarCell: FSCalendarCell {
 
         let luminance = 0.299 * red + 0.587 * green + 0.114 * blue
         return luminance > 0.5 ? UIColor.black.withAlphaComponent(0.87) : .white
+    }
+
+    /// 获取事件在特定日期的位置信息
+    private func getEventPosition(for event: Event, on date: Date) -> EventPosition {
+        let calendar = Calendar.current
+
+        // 对于全天事件，使用日期组件比较
+        if event.isAllDay {
+            let currentComponents = calendar.dateComponents([.year, .month, .day], from: date)
+            let startComponents = calendar.dateComponents([.year, .month, .day], from: event.startDate)
+            let endComponents = calendar.dateComponents([.year, .month, .day], from: event.endDate)
+
+            // 创建仅包含日期的Date对象用于比较
+            let currentDate = calendar.date(from: currentComponents)!
+            let eventStart = calendar.date(from: startComponents)!
+            let eventEnd = calendar.date(from: endComponents)!
+
+            // 调试国庆节事件
+            if event.title.contains("国庆") {
+                print("🎌 国庆节事件位置判断(全天):")
+                print("   事件: \(event.title)")
+                print("   当前日期: \(currentComponents.year!)-\(currentComponents.month!)-\(currentComponents.day!)")
+                print("   事件开始: \(startComponents.year!)-\(startComponents.month!)-\(startComponents.day!)")
+                print("   事件结束: \(endComponents.year!)-\(endComponents.month!)-\(endComponents.day!)")
+            }
+
+            // 检查是否为单天事件
+            if eventStart == eventEnd {
+                if event.title.contains("国庆") {
+                    print("   判定为单天全天事件")
+                }
+                return EventPosition(isStart: true, isMiddle: false, isEnd: true)
+            }
+
+            // 多天事件
+            let isStart = currentDate == eventStart
+            let isEnd = currentDate == eventEnd
+            let isMiddle = currentDate > eventStart && currentDate < eventEnd
+
+            if event.title.contains("国庆") {
+                print("   位置: isStart=\(isStart), isMiddle=\(isMiddle), isEnd=\(isEnd)")
+            }
+
+            return EventPosition(isStart: isStart, isMiddle: isMiddle, isEnd: isEnd)
+        } else {
+            // 非全天事件，使用原有逻辑
+            let currentDate = calendar.startOfDay(for: date)
+            let eventStart = calendar.startOfDay(for: event.startDate)
+            let eventEnd = calendar.startOfDay(for: event.endDate)
+
+            // 单天事件
+            if eventStart == eventEnd {
+                return EventPosition(isStart: true, isMiddle: false, isEnd: true)
+            }
+
+            // 多天事件
+            let isStart = currentDate == eventStart
+            let isEnd = currentDate == eventEnd
+            let isMiddle = currentDate > eventStart && currentDate < eventEnd
+
+            return EventPosition(isStart: isStart, isMiddle: isMiddle, isEnd: isEnd)
+        }
     }
 }

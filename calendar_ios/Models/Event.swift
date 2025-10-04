@@ -115,7 +115,8 @@ final class Event: Identifiable, Hashable, Codable {
         let calendar = Calendar.current
         if isAllDay {
             let start = calendar.startOfDay(for: startDate)
-            let end = calendar.date(byAdding: .day, value: 1, to: start) ?? endDate
+            // 对于全天事件，结束日期应该是endDate的第二天开始
+            let end = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: endDate) ?? endDate)
             return DateInterval(start: start, end: end)
         }
         return DateInterval(start: startDate, end: endDate)

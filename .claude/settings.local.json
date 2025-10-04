@@ -8,7 +8,9 @@
       "Bash(xcrun simctl list:*)",
       "Read(//Users/star/Downloads/FSCalendar-master 3/Example-Objc/**)",
       "Read(//Users/star/Desktop/Projects/Calendar/Calendar/lib/widgets/**)",
-      "WebSearch"
+      "WebSearch",
+      "Read(//Users/star/Desktop/Projects/Calendar/Calendar/lib/**)",
+      "Bash(xed:*)"
     ],
     "deny": [],
     "ask": []
