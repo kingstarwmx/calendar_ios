@@ -38,6 +38,9 @@ final class CalendarViewController: UIViewController {
     /// 建议范围：1.1 ~ 1.5
     private let gestureDirectionThreshold: CGFloat = 1.1
 
+    /// 记录每个月份用户选中的日期（key: "yyyy-MM", value: 选中的日期）
+    private var selectedDatesPerMonth: [String: Date] = [:]
+
     init(viewModel: EventViewModel? = nil) {
         self.viewModel = viewModel ?? EventViewModel()
         super.init(nibName: nil, bundle: nil)
@@ -185,16 +188,76 @@ final class CalendarViewController: UIViewController {
             calendar.date(byAdding: .month, value: currentMonthOffset + 1, to: today)!
         ]
 
+        // 先配置所有页面和选中状态
         for (index, pageView) in monthPageViews.enumerated() {
             let month = months[index]
             let events = viewModel.events.filter { event in
                 calendar.isDate(event.startDate, equalTo: month, toGranularity: .month)
             }
+
+            // 配置月份和数据
             pageView.configure(month: month, events: events)
+
+            // 为每个月份选中对应的日期（立即选中，不等待切换）
+            let selectedDate = getSelectedDateForMonth(month)
+            pageView.calendarView.select(selectedDate, scrollToDate: false)
+
+            // 刷新日历以显示选中状态
+            pageView.calendarView.reloadData()
+
+            print("🗓️ 配置月份: \(getMonthKey(for: month)), 选中日期: \(selectedDate)")
         }
 
         // 更新月份标签
-        updateMonthLabel(for: months[1])
+        let currentMonth = months[1]
+        updateMonthLabel(for: currentMonth)
+
+        // 获取当前月应该选中的日期
+        let currentSelectedDate = getSelectedDateForMonth(currentMonth)
+
+        // 更新 viewModel 的选中日期（用于 tableView）
+        viewModel.selectedDate = currentSelectedDate
+    }
+
+    /// 获取指定月份应该选中的日期
+    /// - Parameter month: 月份
+    /// - Returns: 该月份应该选中的日期
+    private func getSelectedDateForMonth(_ month: Date) -> Date {
+        let monthKey = getMonthKey(for: month)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        // 如果有记录，返回记录的日期
+        if let savedDate = selectedDatesPerMonth[monthKey] {
+            return savedDate
+        }
+
+        // 如果是当前月，返回今天
+        if calendar.isDate(month, equalTo: today, toGranularity: .month) {
+            selectedDatesPerMonth[monthKey] = today
+            return today
+        }
+
+        // 否则返回该月的1号
+        let firstDayOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: month))!
+        selectedDatesPerMonth[monthKey] = firstDayOfMonth
+        return firstDayOfMonth
+    }
+
+    /// 保存用户在某月选中的日期
+    /// - Parameter date: 用户选中的日期
+    private func saveSelectedDate(_ date: Date) {
+        let monthKey = getMonthKey(for: date)
+        selectedDatesPerMonth[monthKey] = date
+    }
+
+    /// 获取月份的 key（格式：yyyy-MM）
+    /// - Parameter date: 日期
+    /// - Returns: 月份 key
+    private func getMonthKey(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        return formatter.string(from: date)
     }
 
     private func bindViewModel() {
@@ -213,17 +276,10 @@ final class CalendarViewController: UIViewController {
             .sink { [weak self] date in
                 guard let self = self else { return }
 
-                // 选中所有日历中的对应日期
-                for pageView in self.monthPageViews {
-                    pageView.calendarView.select(date, scrollToDate: false)
-                }
-
-                self.updateMonthLabel(for: date)
-
                 // 更新工具栏提示语
                 self.inputToolbar.selectedDate = date
 
-                // 刷新 tableView
+                // 刷新当前显示的 tableView
                 self.getCurrentMonthPageView()?.tableView.reloadData()
             }
             .store(in: &cancellables)
@@ -342,11 +398,9 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
         let cell = calendar.dequeueReusableCell(withIdentifier: "CustomCell", for: date, at: position) as! CustomCalendarCell
 
         let events = viewModel.getEvents(for: date)
-        let isSelected = Calendar.current.isDate(date, inSameDayAs: viewModel.selectedDate)
-        let isToday = Calendar.current.isDateInToday(date)
-        let isPlaceholder = position != .current
 
-        cell.configure(with: date, events: events, isSelected: isSelected, isToday: isToday, isPlaceholder: isPlaceholder)
+        // 只配置数据，样式由 configureAppearance 自动处理
+        cell.configure(with: date, events: events)
 
         return cell
     }
@@ -359,6 +413,10 @@ extension CalendarViewController: FSCalendarDataSource, FSCalendarDelegate, FSCa
     func calendar(_ calendar: FSCalendar, didSelect date: Date, at monthPosition: FSCalendarMonthPosition) {
         print("📆 选中日期: \(date)")
 
+        // 保存用户选中的日期
+        saveSelectedDate(date)
+
+        // 更新 viewModel 的选中日期
         viewModel.selectedDate = date
 
         // 刷新所有日历以更新选中状态
@@ -543,6 +601,13 @@ extension CalendarViewController: UITableViewDataSource, UITableViewDelegate {
             return UITableViewCell()
         }
         let events = viewModel.getEvents(for: viewModel.selectedDate)
+        print("🔍 当前选中日期: \(viewModel.selectedDate.formatted())")
+        // 添加边界检查，防止数组越界
+        guard indexPath.row < events.count else {
+            print("⚠️ TableView 索引越界: indexPath.row=\(indexPath.row), events.count=\(events.count)")
+            return cell
+        }
+
         cell.configure(with: events[indexPath.row])
         return cell
     }

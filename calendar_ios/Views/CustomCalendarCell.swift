@@ -18,13 +18,38 @@ class CustomCalendarCell: FSCalendarCell {
         let stackView = UIStackView()
         stackView.axis = .vertical
         stackView.alignment = .fill
-        stackView.distribution = .equalSpacing  // 改为等间距分布，不拉伸子视图
+        stackView.distribution = .equalSpacing
         stackView.spacing = 1
         return stackView
     }()
 
+    /// 选中状态的 shapeLayer（实线描边）
+    private let selectedShapeLayer: CAShapeLayer = {
+        let layer = CAShapeLayer()
+        layer.fillColor = UIColor.clear.cgColor
+        layer.strokeColor = UIColor.systemGray4.cgColor
+        layer.lineWidth = 2
+        layer.isHidden = true
+        return layer
+    }()
+
+    /// 今天状态的 shapeLayer（虚线描边）
+    private let todayShapeLayer: CAShapeLayer = {
+        let layer = CAShapeLayer()
+        layer.fillColor = UIColor.clear.cgColor
+        layer.strokeColor = UIColor.systemGray4.cgColor
+        layer.lineWidth = 2
+        layer.lineDashPattern = [4, 2]  // 虚线样式
+        layer.isHidden = true
+        return layer
+    }()
+
     /// 最大显示事件数
     private let maxEventCount = 3
+
+    /// 当前事件列表（用于配置）
+    private var currentEvents: [Event] = []
+    private var currentDate: Date = Date()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -42,6 +67,13 @@ class CustomCalendarCell: FSCalendarCell {
         subtitleLabel.isHidden = true
         eventIndicator.isHidden = true
 
+        // 隐藏原有的 shapeLayer
+        shapeLayer.isHidden = true
+
+        // 添加自定义 shapeLayers（顺序：today 在下，selected 在上）
+        contentView.layer.insertSublayer(todayShapeLayer, at: 0)
+        contentView.layer.insertSublayer(selectedShapeLayer, at: 1)
+
         // 添加自定义视图
         contentView.addSubview(customTitleLabel)
         contentView.addSubview(eventsStackView)
@@ -57,7 +89,6 @@ class CustomCalendarCell: FSCalendarCell {
             make.top.equalTo(customTitleLabel.snp.bottom)
             make.leading.equalToSuperview().offset(2)
             make.trailing.equalToSuperview().offset(-2)
-            // 不设置 bottom 约束，让 StackView 根据内容自适应高度
         }
     }
 
@@ -67,33 +98,61 @@ class CustomCalendarCell: FSCalendarCell {
         // 确保自定义视图在最上层
         contentView.bringSubviewToFront(customTitleLabel)
         contentView.bringSubviewToFront(eventsStackView)
+
+        // 更新 shapeLayer 的路径
+        let cornerRadius: CGFloat = 8
+        let bounds = contentView.bounds.insetBy(dx: 2, dy: 2)
+        let path = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius)
+
+        selectedShapeLayer.path = path.cgPath
+        todayShapeLayer.path = path.cgPath
     }
 
-    /// 配置单元格
-    func configure(with date: Date, events: [Event], isSelected: Bool, isToday: Bool, isPlaceholder: Bool) {
+    override func configureAppearance() {
+        super.configureAppearance()
+
         // 设置日期文本
-        let day = Calendar.current.component(.day, from: date)
+        let day = Calendar.current.component(.day, from: currentDate)
         customTitleLabel.text = "\(day)"
 
-        // 设置日期标签样式
+        // 判断状态
+        let calendar = Calendar.current
+        let isSelected = self.isSelected
+        let isToday = calendar.isDateInToday(currentDate)
+        let isPlaceholder = self.isPlaceholder
+
+        // 更新文字颜色和字体
         if isSelected {
             customTitleLabel.font = UIFont.systemFont(ofSize: 14, weight: .bold)
-            customTitleLabel.textColor = .white
-            contentView.backgroundColor = .systemBlue
-            contentView.layer.cornerRadius = 8
+            customTitleLabel.textColor = .label
         } else if isToday {
             customTitleLabel.font = UIFont.systemFont(ofSize: 14, weight: .bold)
             customTitleLabel.textColor = .systemBlue
-            contentView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.1)
-            contentView.layer.cornerRadius = 8
-            contentView.layer.borderWidth = 1
-            contentView.layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.5).cgColor
         } else {
             customTitleLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
             customTitleLabel.textColor = isPlaceholder ? .systemGray3 : .label
-            contentView.backgroundColor = .clear
-            contentView.layer.borderWidth = 0
         }
+
+        // 更新 shapeLayer 显示状态
+        if isSelected {
+            // 选中状态：显示实线描边，隐藏虚线
+            selectedShapeLayer.isHidden = false
+            todayShapeLayer.isHidden = true
+        } else if isToday {
+            // 今天状态：显示虚线描边，隐藏实线
+            selectedShapeLayer.isHidden = true
+            todayShapeLayer.isHidden = false
+        } else {
+            // 普通状态：隐藏所有描边
+            selectedShapeLayer.isHidden = true
+            todayShapeLayer.isHidden = true
+        }
+    }
+
+    /// 配置单元格数据
+    func configure(with date: Date, events: [Event]) {
+        self.currentDate = date
+        self.currentEvents = events
 
         // 配置事件列表
         configureEvents(events: events, date: date)

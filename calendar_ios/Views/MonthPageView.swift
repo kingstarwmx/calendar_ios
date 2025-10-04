@@ -22,8 +22,8 @@ class MonthPageView: UIView {
 
         // 样式配置
         calendar.appearance.headerMinimumDissolvedAlpha = 0.0
-        calendar.appearance.todayColor = .systemBlue
-        calendar.appearance.selectionColor = .systemBlue
+        calendar.appearance.todayColor = .systemRed
+        calendar.appearance.selectionColor = .systemCyan
         calendar.appearance.titleDefaultColor = .label
         calendar.appearance.titleTodayColor = .systemBlue
         calendar.appearance.headerTitleColor = .label
@@ -39,23 +39,15 @@ class MonthPageView: UIView {
         table.separatorStyle = .singleLine
         table.rowHeight = UITableView.automaticDimension
         table.estimatedRowHeight = 60
-        table.showsVerticalScrollIndicator = true
+        table.showsVerticalScrollIndicator = false
         return table
     }()
 
     /// 当前显示的月份
-    var currentMonth: Date = Date() {
-        didSet {
-            calendarView.setCurrentPage(currentMonth, animated: false)
-        }
-    }
+    var currentMonth: Date = Date()
 
     /// 事件数据
-    var events: [Event] = [] {
-        didSet {
-            tableView.reloadData()
-        }
-    }
+    var events: [Event] = []
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -75,7 +67,9 @@ class MonthPageView: UIView {
 
         // 布局约束（初始约束，后续会根据模式调整）
         calendarView.snp.makeConstraints { make in
-            make.top.leading.trailing.equalToSuperview()
+            make.leading.equalToSuperview().offset(10)
+            make.trailing.equalToSuperview().offset(-10)
+            make.top.equalToSuperview()
             make.height.equalTo(500)  // 默认高度，后续会动态调整
         }
 
@@ -90,9 +84,16 @@ class MonthPageView: UIView {
     ///   - month: 要显示的月份
     ///   - events: 事件数据
     func configure(month: Date, events: [Event]) {
-        self.currentMonth = month
+        // 只在月份真正改变时才调用 setCurrentPage
+        let calendar = Calendar.current
+        if !calendar.isDate(self.currentMonth, equalTo: month, toGranularity: .month) {
+            self.currentMonth = month
+            calendarView.setCurrentPage(month, animated: false)
+        }
+
         self.events = events
-        calendarView.reloadData()
+
+        // 不需要 reloadData，因为外部会调用 select 方法
     }
 
     /// 更新日历高度
