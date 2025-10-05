@@ -35,7 +35,8 @@ class CustomCalendarCell: FSCalendarCell {
     /// 选中状态的 shapeLayer（实线描边）
     private let selectedShapeLayer: CAShapeLayer = {
         let layer = CAShapeLayer()
-        layer.fillColor = UIColor.clear.cgColor
+        layer.fillColor = UIColor.systemBlue.withAlphaComponent(0.1).cgColor
+        
         layer.strokeColor = UIColor.systemGray4.cgColor
         layer.lineWidth = 1.5
         layer.isHidden = true
@@ -134,14 +135,15 @@ class CustomCalendarCell: FSCalendarCell {
         let isPlaceholder = self.isPlaceholder
 
         // 更新文字颜色和字体
+        let titleFontSize = 16.0
         if isSelected {
-            customTitleLabel.font = UIFont.systemFont(ofSize: 14, weight: .bold)
+            customTitleLabel.font = UIFont.systemFont(ofSize: titleFontSize, weight: .bold)
             customTitleLabel.textColor = .label
         } else if isToday {
-            customTitleLabel.font = UIFont.systemFont(ofSize: 14, weight: .bold)
-            customTitleLabel.textColor = .systemBlue
+            customTitleLabel.font = UIFont.systemFont(ofSize: titleFontSize, weight: .bold)
+            customTitleLabel.textColor = .label
         } else {
-            customTitleLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+            customTitleLabel.font = UIFont.systemFont(ofSize: titleFontSize, weight: .medium)
             customTitleLabel.textColor = isPlaceholder ? .systemGray3 : .label
         }
 
@@ -257,30 +259,36 @@ class CustomCalendarCell: FSCalendarCell {
             // 根据位置决定延伸方向
             let calendar = Calendar.current
             let weekday = calendar.component(.weekday, from: currentDate)
-            let isWeekStart = (weekday == 1)  // 周日是一周的开始
-            let isWeekEnd = (weekday == 7)    // 周六是一周的结束
+
+            // 获取一周的开始和结束（根据系统设置）
+            // FSCalendar的firstWeekday: 1=周日, 2=周一, etc.
+            let firstWeekday = calendar.firstWeekday  // 系统设置的一周开始
+            let lastWeekday = firstWeekday == 1 ? 7 : firstWeekday - 1  // 一周的最后一天
+
+            let isWeekStart = (weekday == firstWeekday)  // 一周的开始
+            let isWeekEnd = (weekday == lastWeekday)     // 一周的结束
+
+            // 判断实际的视觉位置
+            let visualStart = position.isStart || isWeekStart  // 事件开始或每周开始
+            let visualEnd = position.isEnd || isWeekEnd        // 事件结束或每周结束
 
             eventBar.snp.makeConstraints { make in
                 make.top.bottom.equalToSuperview()
 
-                // 判断实际的视觉位置
-                let visualStart = position.isStart || isWeekStart  // 事件开始或每周开始
-                let visualEnd = position.isEnd || isWeekEnd        // 事件结束或每周结束
-
                 if visualStart && !visualEnd {
                     // 视觉开始位置：左边正常（有内边距），右边延伸
                     make.leading.equalToSuperview().offset(2)
-                    make.trailing.equalToSuperview()  // 右边只延伸1点，避免重叠
+                    make.trailing.equalToSuperview()  // 右边延伸到边缘
                 } else if visualEnd && !visualStart {
                     // 视觉结束位置：左边延伸，右边正常（有内边距）
-                    make.leading.equalToSuperview()  // 左边只延伸1点，避免重叠
+                    make.leading.equalToSuperview()  // 左边延伸到边缘
                     make.trailing.equalToSuperview().offset(-2)
                 } else if !visualStart && !visualEnd {
-                    // 中间位置：两边都稍微延伸
-                    make.leading.equalToSuperview()  // 左边延伸1点
-                    make.trailing.equalToSuperview()  // 右边延伸1点
+                    // 中间位置：两边都延伸
+                    make.leading.equalToSuperview()  // 左边延伸到边缘
+                    make.trailing.equalToSuperview()  // 右边延伸到边缘
                 } else {
-                    // 单独的一天（周日开始周六结束）
+                    // 单独的一天（一周的开始同时也是结束，比如只有一天的事件）
                     make.leading.equalToSuperview().offset(2)
                     make.trailing.equalToSuperview().offset(-2)
                 }
@@ -289,9 +297,6 @@ class CustomCalendarCell: FSCalendarCell {
             // 设置圆角：根据视觉位置决定哪边有圆角
             eventBar.layer.cornerRadius = 2
             eventBar.layer.maskedCorners = []
-
-            let visualStart = position.isStart || isWeekStart
-            let visualEnd = position.isEnd || isWeekEnd
 
             if visualStart {
                 // 视觉开始位置：左边有圆角

@@ -92,8 +92,8 @@ class MonthPageView: UIView {
 
         // 布局约束
         calendarView.snp.makeConstraints { make in
-            make.leading.equalToSuperview().offset(10)
-            make.trailing.equalToSuperview().offset(-10)
+            make.leading.equalToSuperview().offset(5)
+            make.trailing.equalToSuperview().offset(-5)
             make.top.equalToSuperview()
             make.height.equalTo(450)  // 默认高度，会动态调整
         }
