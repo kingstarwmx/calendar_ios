@@ -27,6 +27,8 @@ class CustomCalendarCell: FSCalendarCell {
         stackView.alignment = .fill
         stackView.distribution = .equalSpacing
         stackView.spacing = 1
+        stackView.layoutMargins = .zero  // 确保没有内边距
+        stackView.isLayoutMarginsRelativeArrangement = false  // 禁用内边距
         return stackView
     }()
 
@@ -35,7 +37,7 @@ class CustomCalendarCell: FSCalendarCell {
         let layer = CAShapeLayer()
         layer.fillColor = UIColor.clear.cgColor
         layer.strokeColor = UIColor.systemGray4.cgColor
-        layer.lineWidth = 2
+        layer.lineWidth = 1.5
         layer.isHidden = true
         return layer
     }()
@@ -45,7 +47,7 @@ class CustomCalendarCell: FSCalendarCell {
         let layer = CAShapeLayer()
         layer.fillColor = UIColor.clear.cgColor
         layer.strokeColor = UIColor.systemGray4.cgColor
-        layer.lineWidth = 2
+        layer.lineWidth = 1.5
         layer.lineDashPattern = [4, 2]  // 虚线样式
         layer.isHidden = true
         return layer
@@ -77,6 +79,10 @@ class CustomCalendarCell: FSCalendarCell {
         // 隐藏原有的 shapeLayer
         shapeLayer.isHidden = true
 
+        // 允许事件条超出边界，实现连续效果
+        contentView.clipsToBounds = false
+        self.clipsToBounds = false
+
         // 添加自定义 shapeLayers（顺序：today 在下，selected 在上）
         contentView.layer.insertSublayer(todayShapeLayer, at: 0)
         contentView.layer.insertSublayer(selectedShapeLayer, at: 1)
@@ -107,7 +113,7 @@ class CustomCalendarCell: FSCalendarCell {
 
         // 更新 shapeLayer 的路径
         let cornerRadius: CGFloat = 8
-        let bounds = contentView.bounds.insetBy(dx: 0, dy: 0)
+        let bounds = contentView.bounds.insetBy(dx: 1, dy: 1)
         let path = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius)
 
         selectedShapeLayer.path = path.cgPath
@@ -209,12 +215,10 @@ class CustomCalendarCell: FSCalendarCell {
 
     /// 创建事件条
     private func createEventBar(for event: Event, date: Date, position: EventPosition) -> UIView {
-        let container = UIView()
-        container.snp.makeConstraints { make in
-            make.height.equalTo(14)
-        }
+        // 获取事件颜色并降低饱和度
+        let originalColor = event.customColor ?? .systemBlue
+        let eventColor = desaturateColor(originalColor, by: 0.3) // 降低30%饱和度
 
-        let eventColor = event.customColor ?? .systemBlue
         let calendar = Calendar.current
         let currentDate = calendar.startOfDay(for: date)
 
@@ -235,62 +239,124 @@ class CustomCalendarCell: FSCalendarCell {
             print("   shouldExtendToEdges: \(shouldExtendToEdges)")
         }
 
+        // 创建事件条视图
         let eventBar = UIView()
-        eventBar.backgroundColor = eventColor.withAlphaComponent(0.9)
-        container.addSubview(eventBar)
+        // 降低透明度到0.6，让色块更柔和
+        eventBar.backgroundColor = eventColor.withAlphaComponent(0.6)
 
         if shouldExtendToEdges {
-            // 延伸到边缘：左右完全延伸，无内边距
-            eventBar.snp.makeConstraints { make in
-                make.top.equalToSuperview()
-                make.bottom.equalToSuperview()
-                make.leading.equalToSuperview()  // 完全延伸到左边缘
-                make.trailing.equalToSuperview()  // 完全延伸到右边缘
+            // 连续事件：创建一个容器来允许超出边界
+            let container = UIView()
+            container.clipsToBounds = false  // 允许子视图超出边界
+            container.snp.makeConstraints { make in
+                make.height.equalTo(14)
             }
 
-            // 设置圆角：根据位置决定哪边有圆角
+            container.addSubview(eventBar)
+
+            // 根据位置决定延伸方向
+            let calendar = Calendar.current
+            let weekday = calendar.component(.weekday, from: currentDate)
+            let isWeekStart = (weekday == 1)  // 周日是一周的开始
+            let isWeekEnd = (weekday == 7)    // 周六是一周的结束
+
+            eventBar.snp.makeConstraints { make in
+                make.top.bottom.equalToSuperview()
+
+                // 判断实际的视觉位置
+                let visualStart = position.isStart || isWeekStart  // 事件开始或每周开始
+                let visualEnd = position.isEnd || isWeekEnd        // 事件结束或每周结束
+
+                if visualStart && !visualEnd {
+                    // 视觉开始位置：左边正常（有内边距），右边延伸
+                    make.leading.equalToSuperview().offset(2)
+                    make.trailing.equalToSuperview()  // 右边只延伸1点，避免重叠
+                } else if visualEnd && !visualStart {
+                    // 视觉结束位置：左边延伸，右边正常（有内边距）
+                    make.leading.equalToSuperview()  // 左边只延伸1点，避免重叠
+                    make.trailing.equalToSuperview().offset(-2)
+                } else if !visualStart && !visualEnd {
+                    // 中间位置：两边都稍微延伸
+                    make.leading.equalToSuperview()  // 左边延伸1点
+                    make.trailing.equalToSuperview()  // 右边延伸1点
+                } else {
+                    // 单独的一天（周日开始周六结束）
+                    make.leading.equalToSuperview().offset(2)
+                    make.trailing.equalToSuperview().offset(-2)
+                }
+            }
+
+            // 设置圆角：根据视觉位置决定哪边有圆角
             eventBar.layer.cornerRadius = 2
             eventBar.layer.maskedCorners = []
-            if position.isStart {
-                // 开始位置：左边有圆角
+
+            let visualStart = position.isStart || isWeekStart
+            let visualEnd = position.isEnd || isWeekEnd
+
+            if visualStart {
+                // 视觉开始位置：左边有圆角
                 eventBar.layer.maskedCorners.insert([.layerMinXMinYCorner, .layerMinXMaxYCorner])
             }
-            if position.isEnd {
-                // 结束位置：右边有圆角
+            if visualEnd {
+                // 视觉结束位置：右边有圆角
                 eventBar.layer.maskedCorners.insert([.layerMaxXMinYCorner, .layerMaxXMaxYCorner])
             }
-            // 中间位置：没有圆角
+
+            // 判断是否显示文字
+            let shouldShowText = shouldShowEventText(event: event, date: date, position: position)
+            if shouldShowText {
+                let label = UILabel()
+                label.text = event.title
+                label.font = UIFont.systemFont(ofSize: 10, weight: .semibold)
+                label.textColor = getTextColor(for: eventColor)
+                label.textAlignment = .center
+                label.numberOfLines = 1
+                eventBar.addSubview(label)
+
+                label.snp.makeConstraints { make in
+                    make.center.equalToSuperview()
+                    make.leading.greaterThanOrEqualToSuperview().offset(2)
+                    make.trailing.lessThanOrEqualToSuperview().offset(-2)
+                }
+            }
+
+            return container
         } else {
-            // 单天事件：有内边距和四周圆角
+            // 单天事件：创建带内边距的容器
+            let container = UIView()
+            container.snp.makeConstraints { make in
+                make.height.equalTo(14)
+            }
+
+            container.addSubview(eventBar)
             eventBar.snp.makeConstraints { make in
-                make.top.equalToSuperview()
-                make.bottom.equalToSuperview()
+                make.top.bottom.equalToSuperview()
                 make.leading.equalToSuperview().offset(2)  // 单天事件有内边距
                 make.trailing.equalToSuperview().offset(-2)  // 单天事件有内边距
             }
             eventBar.layer.cornerRadius = 2
-        }
 
-        // 判断是否显示文字：基于位置信息
-        let shouldShowText = shouldShowEventText(event: event, date: date, position: position)
+            // 判断是否显示文字：基于位置信息
+            let shouldShowText = shouldShowEventText(event: event, date: date, position: position)
 
-        if shouldShowText {
-            let label = UILabel()
-            label.text = event.title
-            label.font = UIFont.systemFont(ofSize: 10, weight: .semibold)
-            label.textColor = getTextColor(for: eventColor)
-            label.textAlignment = .center
-            label.numberOfLines = 1
-            eventBar.addSubview(label)
+            if shouldShowText {
+                let label = UILabel()
+                label.text = event.title
+                label.font = UIFont.systemFont(ofSize: 10, weight: .semibold)
+                label.textColor = getTextColor(for: eventColor)
+                label.textAlignment = .center
+                label.numberOfLines = 1
+                eventBar.addSubview(label)
 
-            label.snp.makeConstraints { make in
-                make.center.equalToSuperview()
-                make.leading.greaterThanOrEqualToSuperview().offset(2)
-                make.trailing.lessThanOrEqualToSuperview().offset(-2)
+                label.snp.makeConstraints { make in
+                    make.center.equalToSuperview()
+                    make.leading.greaterThanOrEqualToSuperview().offset(2)
+                    make.trailing.lessThanOrEqualToSuperview().offset(-2)
+                }
             }
-        }
 
-        return container
+            return container
+        }
     }
 
     /// 创建溢出指示器 "+n"
@@ -301,7 +367,8 @@ class CustomCalendarCell: FSCalendarCell {
         }
 
         let indicator = UIView()
-        indicator.backgroundColor = UIColor.systemGray4.withAlphaComponent(0.3)
+        // 降低透明度，与事件条保持一致的视觉效果
+        indicator.backgroundColor = UIColor.systemGray4.withAlphaComponent(0.2)
         indicator.layer.cornerRadius = 2
         container.addSubview(indicator)
 
@@ -399,6 +466,24 @@ class CustomCalendarCell: FSCalendarCell {
 
         let luminance = 0.299 * red + 0.587 * green + 0.114 * blue
         return luminance > 0.5 ? UIColor.black.withAlphaComponent(0.87) : .white
+    }
+
+    /// 降低颜色饱和度
+    private func desaturateColor(_ color: UIColor, by percentage: CGFloat) -> UIColor {
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+
+        // 获取颜色的HSB值
+        if color.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) {
+            // 降低饱和度
+            let newSaturation = max(0, saturation * (1 - percentage))
+            return UIColor(hue: hue, saturation: newSaturation, brightness: brightness, alpha: alpha)
+        }
+
+        // 如果无法获取HSB值，返回原色
+        return color
     }
 
     /// 获取事件在特定日期的位置信息
