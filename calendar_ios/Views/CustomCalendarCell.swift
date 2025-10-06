@@ -100,6 +100,9 @@ class CustomCalendarCell: FSCalendarCell {
         contentView.addSubview(customTitleLabel)
         contentView.addSubview(eventsStackView)
 
+        // 确保eventsStackView不裁剪内容，允许文字延伸
+        eventsStackView.clipsToBounds = false
+
         // 设置约束
         topSeparatorView.snp.makeConstraints { make in
             make.top.equalToSuperview()
@@ -123,10 +126,17 @@ class CustomCalendarCell: FSCalendarCell {
     override func layoutSubviews() {
         super.layoutSubviews()
 
-        // 确保自定义视图在最上层
-        contentView.bringSubviewToFront(topSeparatorView)  // 分割线在最上层
-        contentView.bringSubviewToFront(customTitleLabel)
-        contentView.bringSubviewToFront(eventsStackView)
+        // 查找并提升所有标记为999的label的层级
+        eventsStackView.subviews.forEach { container in
+            container.subviews.forEach { eventBar in
+                eventBar.subviews.forEach { view in
+                    if view.tag == 999 {
+                        // 这是需要延伸的文字label，提升其层级
+                        view.layer.zPosition = 9999
+                    }
+                }
+            }
+        }
 
         // 更新 shapeLayer 的路径
         let cornerRadius: CGFloat = 8
@@ -271,6 +281,7 @@ class CustomCalendarCell: FSCalendarCell {
             }
 
             container.addSubview(eventBar)
+            eventBar.clipsToBounds = false  // 允许事件条的内容（文字）超出边界
 
             // 根据位置决定延伸方向
             let calendar = Calendar.current
@@ -330,14 +341,49 @@ class CustomCalendarCell: FSCalendarCell {
                 label.text = event.title
                 label.font = UIFont.systemFont(ofSize: 10, weight: .semibold)
                 label.textColor = getTextColor(for: eventColor)
-                label.textAlignment = .center
-                label.numberOfLines = 1
-                eventBar.addSubview(label)
 
-                label.snp.makeConstraints { make in
-                    make.center.equalToSuperview()
-                    make.leading.greaterThanOrEqualToSuperview().offset(2)
-                    make.trailing.lessThanOrEqualToSuperview().offset(-2)
+                // 对于连续事件的开始位置或每周的视觉开始位置，允许文字延伸
+                // 需要文字延伸的情况：
+                // 1. 事件真正的开始且是多天事件
+                // 2. 每周的视觉开始（周日）且不是事件的最后一天
+                let needExtendText = (position.isStart && !position.isEnd) ||
+                                   (visualStart && !position.isEnd)
+                if needExtendText {
+                    // 连续事件开始或跨周后的开始：文字左对齐，可以延伸到右边
+                    label.textAlignment = .left
+                    label.lineBreakMode = .byClipping  // 不截断文字，允许超出边界
+                    label.clipsToBounds = false  // 允许内容超出边界
+                    label.tag = 999  // 标记需要提升层级的label
+
+                    eventBar.addSubview(label)
+                    label.snp.makeConstraints { make in
+                        make.centerY.equalToSuperview()
+                        make.leading.equalToSuperview().offset(4)
+                        // 不限制trailing，让文字可以延伸
+                        make.width.greaterThanOrEqualTo(200)  // 给足够的宽度显示长文字
+                    }
+                } else if visualStart && visualEnd {
+                    // 一周内的单独一天，或跨周的开始同时也是结束
+                    label.textAlignment = .center
+                    label.numberOfLines = 1
+                    eventBar.addSubview(label)
+
+                    label.snp.makeConstraints { make in
+                        make.center.equalToSuperview()
+                        make.leading.greaterThanOrEqualToSuperview().offset(2)
+                        make.trailing.lessThanOrEqualToSuperview().offset(-2)
+                    }
+                } else {
+                    // 其他情况：居中显示
+                    label.textAlignment = .center
+                    label.numberOfLines = 1
+                    eventBar.addSubview(label)
+
+                    label.snp.makeConstraints { make in
+                        make.center.equalToSuperview()
+                        make.leading.greaterThanOrEqualToSuperview().offset(2)
+                        make.trailing.lessThanOrEqualToSuperview().offset(-2)
+                    }
                 }
             }
 
@@ -365,14 +411,33 @@ class CustomCalendarCell: FSCalendarCell {
                 label.text = event.title
                 label.font = UIFont.systemFont(ofSize: 10, weight: .semibold)
                 label.textColor = getTextColor(for: eventColor)
-                label.textAlignment = .center
-                label.numberOfLines = 1
-                eventBar.addSubview(label)
 
-                label.snp.makeConstraints { make in
-                    make.center.equalToSuperview()
-                    make.leading.greaterThanOrEqualToSuperview().offset(2)
-                    make.trailing.lessThanOrEqualToSuperview().offset(-2)
+                // 对于连续事件的开始位置，允许文字延伸
+                if position.isStart && !position.isEnd {
+                    // 连续事件开始：文字左对齐，可以延伸到右边
+                    label.textAlignment = .left
+                    label.lineBreakMode = .byClipping  // 不截断文字，允许超出边界
+                    label.clipsToBounds = false  // 允许内容超出边界
+                    label.tag = 999  // 标记需要提升层级的label
+
+                    eventBar.addSubview(label)
+                    label.snp.makeConstraints { make in
+                        make.centerY.equalToSuperview()
+                        make.leading.equalToSuperview().offset(4)
+                        // 不限制trailing，让文字可以延伸
+                        make.width.greaterThanOrEqualTo(200)  // 给足够的宽度显示长文字
+                    }
+                } else {
+                    // 单天事件或其他情况：居中显示
+                    label.textAlignment = .center
+                    label.numberOfLines = 1
+                    eventBar.addSubview(label)
+
+                    label.snp.makeConstraints { make in
+                        make.center.equalToSuperview()
+                        make.leading.greaterThanOrEqualToSuperview().offset(2)
+                        make.trailing.lessThanOrEqualToSuperview().offset(-2)
+                    }
                 }
             }
 
