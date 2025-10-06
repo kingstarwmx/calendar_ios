@@ -211,8 +211,40 @@ extension MonthPageView: FSCalendarDataSource {
         // 从 ViewModel 获取事件
         let events = viewModel?.events(for: date) ?? []
         cell.configure(with: date, events: events)
+
+        // 检查是否有连续事件的开始位置，如果有，提升该 cell 的层级
+        for event in events {
+            if isMultiDayEventStart(event: event, date: date) {
+                // 这个 cell 包含连续事件的开始，提升其层级
+                cell.layer.zPosition = 100
+                // 确保 cell 的内容可以超出边界
+                cell.clipsToBounds = false
+                cell.contentView.clipsToBounds = false
+                break
+            }
+        }
+
 //         print("日期:\(date.formatted()),事件数:\(events.count)")
         return cell
+    }
+
+    /// 判断是否是多天事件的开始
+    private func isMultiDayEventStart(event: Event, date: Date) -> Bool {
+        let calendar = Calendar.current
+        let eventStart = calendar.startOfDay(for: event.startDate)
+        let eventEnd = calendar.startOfDay(for: event.endDate)
+        let currentDate = calendar.startOfDay(for: date)
+
+        // 是事件的开始日期且跨越多天
+        let isStart = calendar.isDate(eventStart, inSameDayAs: currentDate)
+        let isMultiDay = !calendar.isDate(eventStart, inSameDayAs: eventEnd)
+
+        // 或者是每周的开始（周日）且事件仍在继续
+        let weekday = calendar.component(.weekday, from: date)
+        let isWeekStart = weekday == 1 // 周日
+        let isInEventRange = currentDate >= eventStart && currentDate < eventEnd
+
+        return (isStart && isMultiDay) || (isWeekStart && isInEventRange && !calendar.isDate(currentDate, inSameDayAs: eventEnd))
     }
 
     func calendar(_ calendar: FSCalendar, numberOfEventsFor date: Date) -> Int {
@@ -249,6 +281,28 @@ extension MonthPageView: FSCalendarDelegate {
     func calendar(_ calendar: FSCalendar, shouldSelect date: Date, at monthPosition: FSCalendarMonthPosition) -> Bool {
         // 可以添加日期选择的业务逻辑
         return true
+    }
+
+    func calendar(_ calendar: FSCalendar, willDisplay cell: FSCalendarCell, for date: Date, at position: FSCalendarMonthPosition) {
+        // 在 cell 即将显示时再次调整层级
+        if let customCell = cell as? CustomCalendarCell {
+            let events = viewModel?.events(for: date) ?? []
+            for event in events {
+                if isMultiDayEventStart(event: event, date: date) {
+                    // 提升包含连续事件开始的 cell
+                    cell.layer.zPosition = 100
+                    cell.superview?.bringSubviewToFront(cell)
+
+                    // 确保内容不被裁剪
+                    cell.clipsToBounds = false
+                    cell.contentView.clipsToBounds = false
+
+                    // 调用 cell 自己的 layoutSubviews 来处理内部层级
+                    cell.setNeedsLayout()
+                    break
+                }
+            }
+        }
     }
 }
 
