@@ -54,6 +54,13 @@ class CustomCalendarCell: FSCalendarCell {
         return layer
     }()
 
+    /// 顶部分割线（用于每行的分割）
+    private let topSeparatorView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .separator  // 系统标准分割线颜色
+        return view
+    }()
+
     /// 最大显示事件数
     private let maxEventCount = 3
 
@@ -89,10 +96,18 @@ class CustomCalendarCell: FSCalendarCell {
         contentView.layer.insertSublayer(selectedShapeLayer, at: 1)
 
         // 添加自定义视图
+        contentView.addSubview(topSeparatorView)  // 添加顶部分割线
         contentView.addSubview(customTitleLabel)
         contentView.addSubview(eventsStackView)
 
         // 设置约束
+        topSeparatorView.snp.makeConstraints { make in
+            make.top.equalToSuperview()
+            make.leading.equalToSuperview()
+            make.trailing.equalToSuperview()
+            make.height.equalTo(1.0 / UIScreen.main.scale)  // 标准分割线高度（1像素）
+        }
+
         customTitleLabel.snp.makeConstraints { make in
             make.top.equalToSuperview().offset(2)
             make.leading.trailing.equalToSuperview()
@@ -109,6 +124,7 @@ class CustomCalendarCell: FSCalendarCell {
         super.layoutSubviews()
 
         // 确保自定义视图在最上层
+        contentView.bringSubviewToFront(topSeparatorView)  // 分割线在最上层
         contentView.bringSubviewToFront(customTitleLabel)
         contentView.bringSubviewToFront(eventsStackView)
 
