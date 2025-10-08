@@ -211,8 +211,9 @@ extension MonthPageView: FSCalendarDataSource {
         // 从 ViewModel 获取事件
         let events = viewModel?.events(for: date) ?? []
         if date.formatted() == "10/9/2025, 00:00" {
-            print("")
+            print("date.formatted():\(date.formatted())")
         }
+        
         cell.configure(with: date, events: events)
 
         // 检查是否有连续事件的开始位置，如果有，提升该 cell 的层级

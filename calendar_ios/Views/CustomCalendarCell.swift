@@ -212,19 +212,40 @@ class CustomCalendarCell: FSCalendarCell {
             return (event: event, position: position)
         }
 
-        // 显示前几个事件
-        let displayCount = min(eventsWithPosition.count, maxEventCount)
+        // 计算实际显示的事件数量
+        let totalCount = eventsWithPosition.count
+        var displayCount = min(totalCount, maxEventCount)
+
+        // 如果只剩1个事件未显示，直接显示它而不是显示"+1"
+        if totalCount == maxEventCount + 1 {
+            displayCount = totalCount  // 显示所有4个事件
+        }
+
+        // 显示事件
         for i in 0..<displayCount {
             let item = eventsWithPosition[i]
             let eventBar = createEventBar(for: item.event, date: date, position: item.position)
             eventsStackView.addArrangedSubview(eventBar)
         }
 
-        // 如果还有更多事件，显示 "+n" 指示器
-        if eventsWithPosition.count > maxEventCount {
-            let remaining = eventsWithPosition.count - maxEventCount
-            let overflowIndicator = createOverflowIndicator(count: remaining)
-            eventsStackView.addArrangedSubview(overflowIndicator)
+        // 如果还有2个或更多事件未显示，显示 "+n" 指示器
+        let remaining = totalCount - displayCount
+        if remaining >= 2 {
+            // 计算剩余事件中非空白事件的数量
+            let remainingEvents = eventsWithPosition[displayCount..<totalCount]
+            let nonBlankRemaining = remainingEvents.filter { !$0.event.isBlank }.count
+
+            // 只有当剩余的非空白事件 >= 2 时才显示 "+n"
+            if nonBlankRemaining >= 2 {
+                let overflowIndicator = createOverflowIndicator(count: nonBlankRemaining)
+                eventsStackView.addArrangedSubview(overflowIndicator)
+            } else if nonBlankRemaining == 1 {
+                // 如果只剩1个非空白事件，找到它并显示
+                if let lastNonBlankEvent = remainingEvents.first(where: { !$0.event.isBlank }) {
+                    let eventBar = createEventBar(for: lastNonBlankEvent.event, date: date, position: lastNonBlankEvent.position)
+                    eventsStackView.addArrangedSubview(eventBar)
+                }
+            }
         }
     }
 

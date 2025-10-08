@@ -37,7 +37,26 @@ final class MonthPageViewModel: ObservableObject {
 
         let filteredEvents = monthEvents.filter { event in
             let interval = event.allDayDisplayRange
-            return interval.start < dayEnd && interval.end > dayStart
+
+            // 规则：
+            // 1. 事件开始时间必须 < 第二天00:00
+            // 2. 事件结束时间必须 > 当天00:00，或者是瞬时事件（开始=结束且在当天）
+            //
+            // 例子：
+            // - 10月8日00:00 - 10月8日00:00（瞬时）：显示在10月8日 ✅
+            // - 10月8日00:00 - 10月9日00:00：只显示在10月8日，不显示在10月9日 ✅
+            // - 10月8日10:00 - 10月8日12:00：显示在10月8日 ✅
+
+            let isInstantEvent = interval.start == interval.end
+            let isEventInDay = interval.start >= dayStart && interval.start < dayEnd
+
+            if isInstantEvent && isEventInDay {
+                // 瞬时事件且在当天
+                return true
+            } else {
+                // 普通事件：结束时间必须 > 当天00:00
+                return interval.start < dayEnd && interval.end > dayStart
+            }
         }
 
         // 调试日志
