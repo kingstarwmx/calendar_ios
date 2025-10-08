@@ -1,5 +1,6 @@
 import UIKit
 import Combine
+import EventKit
 
 @MainActor
 final class CalendarViewController: UIViewController {
@@ -104,8 +105,16 @@ final class CalendarViewController: UIViewController {
         view.backgroundColor = .systemBackground
 
         navigationItem.titleView = monthLabel
-        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addTapped))
-        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "设置", style: .plain, target: self, action: #selector(settingsTapped))
+
+        // 右侧按钮组：添加事件按钮 + 调试按钮
+        let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addTapped))
+        let debugButton = UIBarButtonItem(title: "🐛", style: .plain, target: self, action: #selector(debugExportTapped))
+        navigationItem.rightBarButtonItems = [addButton, debugButton]
+
+        // 左侧按钮组：设置 + 测试按钮
+        let settingsButton = UIBarButtonItem(title: "设置", style: .plain, target: self, action: #selector(settingsTapped))
+        let testButton = UIBarButtonItem(title: "📅", style: .plain, target: self, action: #selector(testDateTapped))
+        navigationItem.leftBarButtonItems = [settingsButton, testButton]
 
         monthLabel.font = UIFont.preferredFont(forTextStyle: .headline)
         monthLabel.textColor = .label
@@ -380,6 +389,13 @@ final class CalendarViewController: UIViewController {
         monthLabel.text = formatter.string(from: date)
     }
 
+    /// 显示提示框
+    private func showAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "确定", style: .default))
+        present(alert, animated: true)
+    }
+
     /// 设置输入工具栏
     private func setupInputToolbar() {
         // 设置选中日期
@@ -461,6 +477,101 @@ final class CalendarViewController: UIViewController {
         }
         let nav = UINavigationController(rootViewController: controller)
         present(nav, animated: true)
+    }
+
+    @objc private func debugExportTapped() {
+        // 获取当前中间页面的 ViewModel
+        let centerIndex = 1  // 中间页面总是 index 1
+        guard centerIndex < monthPageViews.count,
+              let viewModel = monthPageViews[centerIndex].viewModel else {
+            showAlert(title: "错误", message: "无法获取当前月份的数据")
+            return
+        }
+
+        // 导出JSON
+        if let filePath = viewModel.exportEventsToJSON() {
+            showAlert(
+                title: "✅ 导出成功",
+                message: "事件数据已导出到：\n\(filePath)\n\n同时已打印到Console，可以复制使用。\n\n通过Xcode → Window → Devices and Simulators 下载App容器来获取文件。"
+            )
+        } else {
+            showAlert(title: "❌ 导出失败", message: "无法导出事件数据，请查看Console日志")
+        }
+    }
+
+    @objc private func testDateTapped() {
+        // 创建10月9号的日期范围
+        let calendar = Calendar.current
+        var components = DateComponents()
+        components.year = 2025
+        components.month = 10
+        components.day = 11
+        components.hour = 0
+        components.minute = 0
+        components.second = 0
+
+        guard let startDate = calendar.date(from: components),
+              let endDate = calendar.date(byAdding: .day, value: 1, to: startDate) else {
+            showAlert(title: "错误", message: "无法创建日期")
+            return
+        }
+
+        // 使用系统原生方法获取EKEvent
+        Task {
+            do {
+                let eventStore = EKEventStore()
+
+                // 获取所有日历
+                let calendars = eventStore.calendars(for: .event)
+
+                // 创建predicate获取事件
+                let predicate = eventStore.predicateForEvents(
+                    withStart: startDate,
+                    end: endDate,
+                    calendars: calendars
+                )
+
+                let ekEvents = eventStore.events(matching: predicate)
+
+                // 构建显示内容
+                var message = "日期：\(startDate.formatted())\n"
+                message += "星期：\(calendar.component(.weekday, from: startDate))\n"
+                message += "原始EKEvent数量：\(ekEvents.count)\n\n"
+
+                for (index, ekEvent) in ekEvents.enumerated() {
+                    message += "[\(index)] \(ekEvent.title ?? "无标题")\n"
+                    message += "    ID: \(ekEvent.eventIdentifier ?? "无ID")\n"
+                    message += "    isAllDay: \(ekEvent.isAllDay)\n"
+                    message += "    开始: \(ekEvent.startDate?.formatted() ?? "无")\n"
+                    message += "    结束: \(ekEvent.endDate?.formatted() ?? "无")\n"
+                    message += "    日历: \(ekEvent.calendar?.title ?? "无")\n\n"
+                }
+
+                // 显示在弹窗中
+                let alert = UIAlertController(title: "10月9号原始EKEvent数据", message: message, preferredStyle: .alert)
+
+                // 添加复制按钮
+                alert.addAction(UIAlertAction(title: "复制", style: .default, handler: { _ in
+                    UIPasteboard.general.string = message
+                    self.showAlert(title: "✅", message: "已复制到剪贴板")
+                }))
+
+                alert.addAction(UIAlertAction(title: "关闭", style: .cancel))
+
+                await MainActor.run {
+                    self.present(alert, animated: true)
+                }
+
+                // 同时打印到Console
+                print("📅 ==================== 10月9号原始EKEvent数据 ====================")
+                print(message)
+                print("📅 ================================================================")
+            } catch {
+                await MainActor.run {
+                    self.showAlert(title: "错误", message: "获取事件失败: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     @objc private func settingsTapped() {

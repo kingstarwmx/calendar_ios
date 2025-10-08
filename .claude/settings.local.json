@@ -10,7 +10,8 @@
       "Read(//Users/star/Desktop/Projects/Calendar/Calendar/lib/widgets/**)",
       "WebSearch",
       "Read(//Users/star/Desktop/Projects/Calendar/Calendar/lib/**)",
-      "Bash(xed:*)"
+      "Bash(xed:*)",
+      "Read(//Users/star/Downloads/**)"
     ],
     "deny": [],
     "ask": []

@@ -48,12 +48,115 @@ final class MonthPageViewModel: ObservableObject {
             }
         }
 
-        return filteredEvents.sorted { lhs, rhs in
+        // 先按时间排序
+        var sortedEvents = filteredEvents.sorted { lhs, rhs in
             if lhs.startDate == rhs.startDate {
                 return lhs.endDate < rhs.endDate
             }
             return lhs.startDate < rhs.startDate
         }
+
+        // 判断是否是一周的开始（注意：不一定是周日，系统可以自定义一周开始的是周几）
+        let weekday = calendar.component(.weekday, from: dayStart)
+        let firstWeekday = calendar.firstWeekday // 系统设置的一周开始日期（1=周日, 2=周一, ...）
+        let isWeekStart = (weekday == firstWeekday)
+
+        if isWeekStart {
+            // 一周开始的天：连续事件重新排序到前面
+            let multiDayEvents = sortedEvents.filter { isMultiDayEvent($0) }
+            let singleDayEvents = sortedEvents.filter { !isMultiDayEvent($0) }
+            sortedEvents = multiDayEvents + singleDayEvents
+        } else {
+            // 非一周开始的天：连续事件需要保持前一天的位置
+            guard let previousDay = calendar.date(byAdding: .day, value: -1, to: dayStart) else {
+                return sortedEvents
+            }
+
+            // 获取前一天的事件
+            let previousDayEvents = events(for: previousDay)
+
+            // 找出当天的连续事件和单天事件
+            let currentMultiDayEvents = sortedEvents.filter { isMultiDayEvent($0) }
+            let currentSingleDayEvents = sortedEvents.filter { !isMultiDayEvent($0) }
+
+            // 为每个连续事件找到在前一天的位置
+            var positionMap: [String: Int] = [:]  // eventId -> previousDayIndex
+            for (index, event) in previousDayEvents.enumerated() {
+                positionMap[event.id] = index
+            }
+
+            // 计算当天需要的最大index（由前一天连续事件位置决定）
+            var maxRequiredIndex = -1
+            for event in currentMultiDayEvents {
+                if let prevIndex = positionMap[event.id] {
+                    maxRequiredIndex = max(maxRequiredIndex, prevIndex)
+                }
+            }
+
+            // 创建足够大的结果数组（初始填充nil）
+            let arraySize = max(maxRequiredIndex + 1, currentMultiDayEvents.count + currentSingleDayEvents.count)
+            var resultArray: [Event?] = Array(repeating: nil, count: arraySize)
+
+            // 放置连续事件到对应位置
+            for event in currentMultiDayEvents {
+                if let prevIndex = positionMap[event.id] {
+                    // 如果前一天有这个连续事件，保持相同位置
+                    resultArray[prevIndex] = event
+                } else {
+                    // 如果前一天没有，找第一个空位置（连续事件优先放在前面）
+                    if let firstNilIndex = resultArray.firstIndex(where: { $0 == nil }) {
+                        resultArray[firstNilIndex] = event
+                    } else {
+                        resultArray.append(event)
+                    }
+                }
+            }
+
+            // 放置单天事件到剩余位置
+            for event in currentSingleDayEvents {
+                if let firstNilIndex = resultArray.firstIndex(where: { $0 == nil }) {
+                    resultArray[firstNilIndex] = event
+                } else {
+                    resultArray.append(event)
+                }
+            }
+
+            // 填充空白事件（isBlank = true）
+            for i in 0..<resultArray.count {
+                if resultArray[i] == nil {
+                    // 创建空白事件
+                    let blankEvent = Event(
+                        id: "blank_\(date.timeIntervalSince1970)_\(i)",
+                        title: "",
+                        startDate: dayStart,
+                        endDate: dayStart,
+                        isAllDay: false,
+                        location: "",
+                        calendarId: "",
+                        isBlank: true
+                    )
+                    resultArray[i] = blankEvent
+                }
+            }
+
+            // 转换为非可选数组
+            sortedEvents = resultArray.compactMap { $0 }
+        }
+
+        return sortedEvents
+    }
+
+    /// 判断是否为单天事件（开始时间>=当天00:00，结束时间<=第二天00:00）
+    private func isSingleDayEvent(_ event: Event) -> Bool {
+        let startOfDay = calendar.startOfDay(for: event.startDate)
+        let nextDayStart = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? event.startDate
+
+        return event.startDate >= startOfDay && event.endDate <= nextDayStart
+    }
+
+    /// 判断是否为连续事件（多天事件）
+    private func isMultiDayEvent(_ event: Event) -> Bool {
+        return !isSingleDayEvent(event)
     }
 
     /// 当月的第一天
@@ -193,6 +296,73 @@ final class MonthPageViewModel: ObservableObject {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy年M月"
         return formatter.string(from: currentMonth)
+    }
+
+    // MARK: - Debug Methods
+
+    /// 导出指定月份的事件数据到JSON文件（用于调试）
+    /// - Returns: JSON文件的路径，如果导出失败返回nil
+    func exportEventsToJSON() -> String? {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        var result: [String: [[String: Any]]] = [:]
+
+        // 计算实际显示范围（包括前后月份的占位日期）
+        let range = actualDisplayRange
+
+        var currentDate = range.lowerBound
+        while currentDate <= range.upperBound {
+            let dateString = formatter.string(from: currentDate)
+            let eventsForDate = events(for: currentDate)
+
+            var eventsArray: [[String: Any]] = []
+            for (index, event) in eventsForDate.enumerated() {
+                eventsArray.append([
+                    "index": index,
+                    "id": event.id,
+                    "title": event.title,
+                    "isBlank": event.isBlank,
+                    "isMultiDay": isMultiDayEvent(event),
+                    "startDate": formatter.string(from: event.startDate),
+                    "endDate": formatter.string(from: event.endDate),
+                    "isAllDay": event.isAllDay
+                ])
+            }
+
+            result[dateString] = eventsArray
+
+            // 移动到下一天
+            guard let nextDate = calendar.date(byAdding: .day, value: 1, to: currentDate) else {
+                break
+            }
+            currentDate = nextDate
+        }
+
+        // 转换为JSON
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: result, options: .prettyPrinted)
+
+            // 保存到Documents目录
+            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let fileURL = documentsPath.appendingPathComponent("calendar_events_debug_\(monthTitle).json")
+
+            try jsonData.write(to: fileURL)
+
+            // 同时打印到Console
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                print("📄 ==================== 事件数据导出 ====================")
+                print("📄 文件路径: \(fileURL.path)")
+                print("📄 JSON内容:")
+                print(jsonString)
+                print("📄 ======================================================")
+            }
+
+            return fileURL.path
+        } catch {
+            print("❌ 导出JSON失败: \(error)")
+            return nil
+        }
     }
 }
 

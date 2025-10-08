@@ -20,6 +20,7 @@ final class Event: Identifiable, Hashable, Codable {
         case calendarName
         case isFromDeviceCalendar
         case deviceEventId
+        case isBlank
     }
 
     let id: String
@@ -37,6 +38,8 @@ final class Event: Identifiable, Hashable, Codable {
     var calendarName: String?
     var isFromDeviceCalendar: Bool
     var deviceEventId: String?
+    /// 是否为占位空白事件（用于连续事件的对齐）
+    var isBlank: Bool
 
     init(
         id: String,
@@ -53,7 +56,8 @@ final class Event: Identifiable, Hashable, Codable {
         url: String? = nil,
         calendarName: String? = nil,
         isFromDeviceCalendar: Bool = false,
-        deviceEventId: String? = nil
+        deviceEventId: String? = nil,
+        isBlank: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -70,6 +74,7 @@ final class Event: Identifiable, Hashable, Codable {
         self.calendarName = calendarName
         self.isFromDeviceCalendar = isFromDeviceCalendar
         self.deviceEventId = deviceEventId
+        self.isBlank = isBlank
     }
 
     /// 复制当前事件并覆盖部分字段
@@ -88,7 +93,8 @@ final class Event: Identifiable, Hashable, Codable {
         url: String? = nil,
         calendarName: String? = nil,
         isFromDeviceCalendar: Bool? = nil,
-        deviceEventId: String? = nil
+        deviceEventId: String? = nil,
+        isBlank: Bool? = nil
     ) -> Event {
         Event(
             id: id ?? self.id,
@@ -105,7 +111,8 @@ final class Event: Identifiable, Hashable, Codable {
             url: url ?? self.url,
             calendarName: calendarName ?? self.calendarName,
             isFromDeviceCalendar: isFromDeviceCalendar ?? self.isFromDeviceCalendar,
-            deviceEventId: deviceEventId ?? self.deviceEventId
+            deviceEventId: deviceEventId ?? self.deviceEventId,
+            isBlank: isBlank ?? self.isBlank
         )
     }
 
@@ -141,6 +148,7 @@ final class Event: Identifiable, Hashable, Codable {
         let calendarName = try container.decodeIfPresent(String.self, forKey: .calendarName)
         let isFromDeviceCalendar = try container.decodeIfPresent(Bool.self, forKey: .isFromDeviceCalendar) ?? false
         let deviceEventId = try container.decodeIfPresent(String.self, forKey: .deviceEventId)
+        let isBlank = try container.decodeIfPresent(Bool.self, forKey: .isBlank) ?? false
 
         self.init(
             id: id,
@@ -157,7 +165,8 @@ final class Event: Identifiable, Hashable, Codable {
             url: url,
             calendarName: calendarName,
             isFromDeviceCalendar: isFromDeviceCalendar,
-            deviceEventId: deviceEventId
+            deviceEventId: deviceEventId,
+            isBlank: isBlank
         )
     }
 
@@ -178,6 +187,7 @@ final class Event: Identifiable, Hashable, Codable {
         try container.encode(calendarName, forKey: .calendarName)
         try container.encode(isFromDeviceCalendar, forKey: .isFromDeviceCalendar)
         try container.encode(deviceEventId, forKey: .deviceEventId)
+        try container.encode(isBlank, forKey: .isBlank)
     }
 
     // MARK: - Hashable

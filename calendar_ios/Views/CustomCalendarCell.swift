@@ -206,36 +206,23 @@ class CustomCalendarCell: FSCalendarCell {
         guard !events.isEmpty else { return }
 
         // 为每个事件添加位置信息
+        // 注意：events 已经在 ViewModel 中排序好了，这里不需要再排序
         let eventsWithPosition = events.map { event -> (event: Event, position: EventPosition) in
             let position = getEventPosition(for: event, on: date)
             return (event: event, position: position)
         }
 
-        // 排序：多天事件优先，然后按时间排序
-        let sortedEvents = eventsWithPosition.sorted { item1, item2 in
-            let isMultiDay1 = isMultiDayEvent(item1.event)
-            let isMultiDay2 = isMultiDayEvent(item2.event)
-
-            if isMultiDay1 && !isMultiDay2 {
-                return true
-            } else if !isMultiDay1 && isMultiDay2 {
-                return false
-            } else {
-                return item1.event.startDate < item2.event.startDate
-            }
-        }
-
         // 显示前几个事件
-        let displayCount = min(sortedEvents.count, maxEventCount)
+        let displayCount = min(eventsWithPosition.count, maxEventCount)
         for i in 0..<displayCount {
-            let item = sortedEvents[i]
+            let item = eventsWithPosition[i]
             let eventBar = createEventBar(for: item.event, date: date, position: item.position)
             eventsStackView.addArrangedSubview(eventBar)
         }
 
         // 如果还有更多事件，显示 "+n" 指示器
-        if sortedEvents.count > maxEventCount {
-            let remaining = sortedEvents.count - maxEventCount
+        if eventsWithPosition.count > maxEventCount {
+            let remaining = eventsWithPosition.count - maxEventCount
             let overflowIndicator = createOverflowIndicator(count: remaining)
             eventsStackView.addArrangedSubview(overflowIndicator)
         }
@@ -243,6 +230,16 @@ class CustomCalendarCell: FSCalendarCell {
 
     /// 创建事件条
     private func createEventBar(for event: Event, date: Date, position: EventPosition) -> UIView {
+        // 如果是空白事件，返回透明的占位视图
+        if event.isBlank {
+            let container = UIView()
+            container.snp.makeConstraints { make in
+                make.height.equalTo(14)
+            }
+            container.backgroundColor = .clear
+            return container
+        }
+
         // 获取事件颜色并降低饱和度
         let originalColor = event.customColor ?? .systemBlue
         let eventColor = desaturateColor(originalColor, by: 0.3) // 降低30%饱和度
