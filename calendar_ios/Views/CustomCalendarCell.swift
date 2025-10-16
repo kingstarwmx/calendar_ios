@@ -16,6 +16,9 @@ private final class EventSlotView: UIView {
         case centered(text: String, color: UIColor)
     }
 
+    private let slotHeight: CGFloat
+    private(set) var isActive = false
+
     private let eventBar = UIView()
     private let textLabel: UILabel = {
         let label = UILabel()
@@ -40,24 +43,24 @@ private final class EventSlotView: UIView {
         return label
     }()
 
+    var intrinsicHeight: CGFloat { slotHeight }
+
     init(slotHeight: CGFloat) {
+        self.slotHeight = slotHeight
         super.init(frame: .zero)
-        setup(slotHeight: slotHeight)
+        setup()
     }
 
     required init?(coder: NSCoder) {
+        self.slotHeight = CustomCalendarCell.layoutMetrics.eventSlotHeight
         super.init(coder: coder)
-        setup(slotHeight: CustomCalendarCell.layoutMetrics.eventSlotHeight)
+        setup()
     }
 
-    private func setup(slotHeight: CGFloat) {
-        translatesAutoresizingMaskIntoConstraints = false
+    private func setup() {
+        translatesAutoresizingMaskIntoConstraints = true
         clipsToBounds = false
         isHidden = true
-
-        snp.makeConstraints { make in
-            make.height.equalTo(slotHeight)
-        }
 
         addSubview(eventBar)
         eventBar.clipsToBounds = false
@@ -89,6 +92,7 @@ private final class EventSlotView: UIView {
 
     func configureBlank() {
         isHidden = false
+        isActive = true
         eventBar.isHidden = true
         overflowBackground.isHidden = true
         textLabel.isHidden = true
@@ -98,6 +102,7 @@ private final class EventSlotView: UIView {
 
     func configureOverflow(count: Int) {
         isHidden = false
+        isActive = true
         eventBar.isHidden = true
         overflowBackground.isHidden = false
         overflowBackground.backgroundColor = UIColor.systemGray4.withAlphaComponent(0.2)
@@ -108,6 +113,7 @@ private final class EventSlotView: UIView {
 
     func configureEvent(with configuration: CustomCalendarCell.EventSlotConfiguration) {
         isHidden = false
+        isActive = true
         overflowBackground.isHidden = true
         eventBar.isHidden = false
 
@@ -126,6 +132,7 @@ private final class EventSlotView: UIView {
 
     func reset() {
         isHidden = true
+        isActive = false
         eventBar.isHidden = true
         overflowBackground.isHidden = true
         textLabel.text = nil
@@ -188,16 +195,11 @@ class CustomCalendarCell: FSCalendarCell {
         return label
     }()
 
-    /// 事件容器（垂直列表）
-    private let eventsStackView: UIStackView = {
-        let stackView = UIStackView()
-        stackView.axis = .vertical
-        stackView.alignment = .fill
-        stackView.distribution = .equalSpacing
-        stackView.spacing = 1
-        stackView.layoutMargins = .zero  // 确保没有内边距
-        stackView.isLayoutMarginsRelativeArrangement = false  // 禁用内边距
-        return stackView
+    /// 事件容器（手动管理子视图）
+    private let eventsContainerView: UIView = {
+        let view = UIView()
+        view.clipsToBounds = false
+        return view
     }()
 
     private enum EventDisplayItem {
@@ -268,13 +270,12 @@ class CustomCalendarCell: FSCalendarCell {
     private let maxEventCount = 3
 
     /// 理论上可显示的最大色块数量（由外部根据高度计算后传入）
-    var maxVisibleSlots: Int = 0 {
+    private(set) var maxVisibleSlots: Int = 0 {
         didSet {
-            if maxVisibleSlots < 0 {
-                maxVisibleSlots = 0
-                return
+            if maxVisibleSlots < 0 { maxVisibleSlots = 0 }
+            if maxVisibleSlots != oldValue {
+                prepareSlots(capacity: max(maxVisibleSlots, eventSlots.count))
             }
-            prepareSlots(capacity: max(maxVisibleSlots, eventSlots.count))
         }
     }
 
@@ -315,10 +316,7 @@ class CustomCalendarCell: FSCalendarCell {
         // 添加自定义视图
         contentView.addSubview(topSeparatorView)  // 添加顶部分割线
         contentView.addSubview(customTitleLabel)
-        contentView.addSubview(eventsStackView)
-
-        // 确保eventsStackView不裁剪内容，允许文字延伸
-        eventsStackView.clipsToBounds = false
+        contentView.addSubview(eventsContainerView)
 
         // 设置约束
         topSeparatorView.snp.makeConstraints { make in
@@ -334,14 +332,17 @@ class CustomCalendarCell: FSCalendarCell {
             make.height.equalTo(24)
         }
 
-        eventsStackView.snp.makeConstraints { make in
+        eventsContainerView.snp.makeConstraints { make in
             make.top.equalTo(customTitleLabel.snp.bottom)
-            make.leading.trailing.equalToSuperview()  // 移除内边距，让事件条可以延伸到边缘
+            make.leading.trailing.equalToSuperview()
+            make.bottom.lessThanOrEqualToSuperview()
         }
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
+
+        layoutEventSlots()
 
         // 查找并提升所有标记为999的label的层级
         eventSlots.forEach { $0.elevateExtendedLabel() }
@@ -409,6 +410,16 @@ class CustomCalendarCell: FSCalendarCell {
 
         // 配置事件列表
         configureEvents(events: events, date: date)
+    }
+
+    /// 根据新的槽位上限更新显示
+    func updateSlotLimit(_ limit: Int, refresh: Bool = true) {
+        let normalized = max(0, limit)
+        guard normalized != maxVisibleSlots else { return }
+        maxVisibleSlots = normalized
+        if refresh {
+            configureEvents(events: currentEvents, date: currentDate)
+        }
     }
 
     /// 配置事件显示
@@ -479,6 +490,9 @@ class CustomCalendarCell: FSCalendarCell {
                 eventSlots[index].reset()
             }
         }
+
+        eventsContainerView.setNeedsLayout()
+        setNeedsLayout()
     }
 
     /// 准备槽位池
@@ -488,7 +502,9 @@ class CustomCalendarCell: FSCalendarCell {
         let metrics = CustomCalendarCell.layoutMetrics
         for _ in eventSlots.count..<capacity {
             let slot = EventSlotView(slotHeight: metrics.eventSlotHeight)
-            eventsStackView.addArrangedSubview(slot)
+            slot.translatesAutoresizingMaskIntoConstraints = true
+            eventsContainerView.addSubview(slot)
+
             slot.reset()
             eventSlots.append(slot)
         }
@@ -509,20 +525,37 @@ class CustomCalendarCell: FSCalendarCell {
         let originalColor = event.customColor ?? .systemBlue
         let baseColor = desaturateColor(originalColor, by: 0.3)
 
-        if event.title.contains("国庆") {
-            let calendar = Calendar.current
-            let currentDate = calendar.startOfDay(for: date)
-            print("🎨 创建国庆节事件条:")
-            print("   日期: \(currentDate)")
-            print("   position: start=\(position.isStart), middle=\(position.isMiddle), end=\(position.isEnd)")
-        }
-
         let configuration = makeEventConfiguration(for: event,
                                                     position: position,
                                                     date: date,
                                                     baseColor: baseColor)
 
         slot.configureEvent(with: configuration)
+    }
+
+    private func layoutEventSlots() {
+        let metrics = CustomCalendarCell.layoutMetrics
+        let width = eventsContainerView.bounds.width
+        guard width > 0 else { return }
+
+        var currentY: CGFloat = 0
+        var placedAny = false
+
+        for slot in eventSlots {
+            if slot.isActive {
+                if placedAny {
+                    currentY += metrics.eventSlotSpacing
+                }
+                slot.isHidden = false
+                let height = slot.intrinsicHeight
+                slot.frame = CGRect(x: 0, y: currentY, width: width, height: height)
+                currentY += height
+                placedAny = true
+            } else {
+                slot.isHidden = true
+                slot.frame = CGRect(x: 0, y: currentY, width: width, height: 0)
+            }
+        }
     }
 
     private func makeEventConfiguration(for event: Event,
@@ -549,12 +582,6 @@ class CustomCalendarCell: FSCalendarCell {
         if shouldExtendToEdges {
             visualStart = position.isStart || weekday == firstWeekday
             visualEnd = position.isEnd || weekday == lastWeekday
-        }
-
-        if event.title.contains("国庆") {
-            print("   isSingleDay: \(isSingleDay)")
-            print("   shouldExtendToEdges: \(shouldExtendToEdges)")
-            print("   visualStart: \(visualStart), visualEnd: \(visualEnd)")
         }
 
         let defaultCorners: CACornerMask = [
@@ -615,32 +642,20 @@ class CustomCalendarCell: FSCalendarCell {
 
     /// 判断是否为多天事件
     private func isMultiDayEvent(_ event: Event) -> Bool {
-        // 对于全天事件，需要特殊处理
+        let calendar = Calendar.current
+
         if event.isAllDay {
-            let calendar = Calendar.current
-            // 对于全天事件，直接比较日期组件，避免时区问题
             let startComponents = calendar.dateComponents([.year, .month, .day], from: event.startDate)
             let endComponents = calendar.dateComponents([.year, .month, .day], from: event.endDate)
 
-            let isMultiDay = startComponents.year != endComponents.year ||
-                             startComponents.month != endComponents.month ||
-                             startComponents.day != endComponents.day
-
-            if event.title.contains("国庆") {
-                print("🔍 isMultiDayEvent 判断(全天事件):")
-                print("   事件: \(event.title)")
-                print("   开始日期组件: \(startComponents.year!)-\(startComponents.month!)-\(startComponents.day!)")
-                print("   结束日期组件: \(endComponents.year!)-\(endComponents.month!)-\(endComponents.day!)")
-                print("   是否多天: \(isMultiDay)")
-            }
-
-            return isMultiDay
+            return startComponents.year != endComponents.year ||
+                   startComponents.month != endComponents.month ||
+                   startComponents.day != endComponents.day
         } else {
-            // 非全天事件，使用原有逻辑
-            let calendar = Calendar.current
-            let start = calendar.startOfDay(for: event.startDate)
-            let end = calendar.startOfDay(for: event.endDate)
-            return start != end
+            let startDay = calendar.startOfDay(for: event.startDate)
+            let normalizedEnd = normalizedEndDate(for: event, calendar: calendar)
+            let endDay = calendar.startOfDay(for: normalizedEnd)
+            return startDay != endDay
         }
     }
 
@@ -657,7 +672,10 @@ class CustomCalendarCell: FSCalendarCell {
         let calendar = Calendar.current
         let currentDate = calendar.startOfDay(for: date)
         let eventStart = calendar.startOfDay(for: event.startDate)
-        let eventEnd = calendar.startOfDay(for: event.endDate)
+        let normalizedEnd = event.isAllDay
+            ? calendar.startOfDay(for: event.endDate)
+            : calendar.startOfDay(for: normalizedEndDate(for: event, calendar: calendar))
+        let eventEnd = normalizedEnd
 
         // 如果是事件开始日期，显示文字
         if position.isStart {
@@ -706,6 +724,28 @@ class CustomCalendarCell: FSCalendarCell {
         return color
     }
 
+    /// 规范化结束时间，处理在次日零点结束的事件
+    private func normalizedEndDate(for event: Event, calendar: Calendar) -> Date {
+        guard !event.isAllDay else { return event.endDate }
+
+        let end = event.endDate
+        guard end > event.startDate else { return end }
+
+        let components = calendar.dateComponents([.hour, .minute, .second, .nanosecond], from: end)
+        let endsAtStartOfDay = (components.hour ?? 0) == 0 &&
+                               (components.minute ?? 0) == 0 &&
+                               (components.second ?? 0) == 0 &&
+                               (components.nanosecond ?? 0) == 0
+
+        if endsAtStartOfDay,
+           let adjusted = calendar.date(byAdding: .second, value: -1, to: end),
+           adjusted >= event.startDate {
+            return adjusted
+        }
+
+        return end
+    }
+
     /// 获取事件在特定日期的位置信息
     private func getEventPosition(for event: Event, on date: Date) -> EventPosition {
         let calendar = Calendar.current
@@ -752,9 +792,9 @@ class CustomCalendarCell: FSCalendarCell {
             // 非全天事件，使用原有逻辑
             let currentDate = calendar.startOfDay(for: date)
             let eventStart = calendar.startOfDay(for: event.startDate)
-            let eventEnd = calendar.startOfDay(for: event.endDate)
+            let normalizedEnd = normalizedEndDate(for: event, calendar: calendar)
+            let eventEnd = calendar.startOfDay(for: normalizedEnd)
 
-            // 单天事件
             if eventStart == eventEnd {
                 return EventPosition(isStart: true, isMiddle: false, isEnd: true)
             }

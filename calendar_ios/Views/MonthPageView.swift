@@ -52,6 +52,7 @@ class MonthPageView: UIView {
     var viewModel: MonthPageViewModel?
     private var cancellables = Set<AnyCancellable>()
     private var calendarHeightConstraint: Constraint?
+    private var currentSlotLimit: Int
 
     // MARK: - Callbacks
 
@@ -70,6 +71,7 @@ class MonthPageView: UIView {
     // MARK: - Initialization
 
     override init(frame: CGRect) {
+        currentSlotLimit = MonthPageView.baselineSlotLimit()
         super.init(frame: frame)
         setupUI()
         setupCalendar()
@@ -77,6 +79,7 @@ class MonthPageView: UIView {
     }
 
     required init?(coder: NSCoder) {
+        currentSlotLimit = MonthPageView.baselineSlotLimit()
         super.init(coder: coder)
         setupUI()
         setupCalendar()
@@ -100,6 +103,8 @@ class MonthPageView: UIView {
             make.top.equalToSuperview()
             calendarHeightConstraint = make.height.equalTo(initialHeight).constraint
         }
+
+        currentSlotLimit = slotLimit(for: initialHeight, month: calendarView.currentPage)
 
         tableView.snp.makeConstraints { make in
             make.top.equalTo(calendarView.snp.bottom)
@@ -132,7 +137,9 @@ class MonthPageView: UIView {
         // 初始设置 - 不立即 reloadData，让 Combine 绑定来触发
         calendarView.setCurrentPage(viewModel.currentMonth, animated: false)
         calendarView.select(viewModel.selectedDate, scrollToDate: false)
-        calendarHeightConstraint?.update(offset: calendarHeight(for: viewModel.currentMonth))
+        let initialHeight = calendarHeight(for: viewModel.currentMonth)
+        calendarHeightConstraint?.update(offset: initialHeight)
+        updateSlotLimit(for: initialHeight, month: viewModel.currentMonth)
     }
 
     private func setupBindings() {
@@ -149,7 +156,9 @@ class MonthPageView: UIView {
                 print("📅 [\(viewModel.monthTitle)] currentMonth changed, setCurrentPage")
                 guard let self = self else { return }
                 self.calendarView.setCurrentPage(month, animated: false)
-                self.calendarHeightConstraint?.update(offset: self.calendarHeight(for: month))
+                let monthHeight = self.calendarHeight(for: month)
+                self.calendarHeightConstraint?.update(offset: monthHeight)
+                self.updateSlotLimit(for: monthHeight, month: month)
             }
             .store(in: &cancellables)
 
@@ -200,6 +209,7 @@ class MonthPageView: UIView {
     /// 更新日历高度
     func updateCalendarHeight(_ height: CGFloat) {
         calendarHeightConstraint?.update(offset: height)
+        updateSlotLimit(for: height, month: calendarView.currentPage)
         layoutIfNeeded()
         onCalendarHeightChanged?(height)
     }
@@ -223,13 +233,17 @@ class MonthPageView: UIView {
         return max(1, rows)
     }
 
-    private func monthSlotLimit() -> Int {
-        return DeviceHelper.isPad || DeviceHelper.isLargeScreen ? 4 : 3
+    private static func baselineSlotLimit() -> Int {
+        DeviceHelper.isPad || DeviceHelper.isLargeScreen ? 4 : 3
+    }
+
+    private func baselineSlotLimit() -> Int {
+        MonthPageView.baselineSlotLimit()
     }
 
     private func rowHeightForMonthMode() -> CGFloat {
         let metrics = CustomCalendarCell.layoutMetrics
-        let slots = monthSlotLimit()
+        let slots = baselineSlotLimit()
         let slotHeight = CGFloat(slots) * metrics.eventSlotHeight
         let spacing = CGFloat(max(slots - 1, 0)) * metrics.eventSlotSpacing
         return metrics.reservedHeight + slotHeight + spacing
@@ -237,6 +251,36 @@ class MonthPageView: UIView {
 
     private func calendarHeight(for month: Date) -> CGFloat {
         CGFloat(rowCount(for: month)) * rowHeightForMonthMode()
+    }
+
+    private func slotLimit(for height: CGFloat, month: Date) -> Int {
+        let baseline = baselineSlotLimit()
+        let rows = max(rowCount(for: month), 1)
+        guard height > 0 else { return baseline }
+
+        let rowHeight = height / CGFloat(rows)
+        let metrics = CustomCalendarCell.layoutMetrics
+        let available = rowHeight - metrics.reservedHeight
+        guard available > 0 else { return baseline }
+
+        let slotUnit = metrics.eventSlotHeight + metrics.eventSlotSpacing
+        guard slotUnit > 0 else { return baseline }
+
+        let slots = Int(floor((available + metrics.eventSlotSpacing) / slotUnit))
+        return max(baseline, slots)
+    }
+
+    private func updateSlotLimit(for height: CGFloat, month: Date) {
+        let newLimit = slotLimit(for: height, month: month)
+        guard newLimit != currentSlotLimit else { return }
+        currentSlotLimit = newLimit
+        applySlotLimitToVisibleCells()
+    }
+
+    private func applySlotLimitToVisibleCells() {
+        for case let cell as CustomCalendarCell in calendarView.visibleCells() {
+            cell.updateSlotLimit(currentSlotLimit)
+        }
     }
 }
 
@@ -252,9 +296,9 @@ extension MonthPageView: FSCalendarDataSource {
         if date.formatted() == "10/9/2025, 00:00" {
             print("date.formatted():\(date.formatted())")
         }
+        
 
-        cell.maxVisibleSlots = monthSlotLimit()
-
+        cell.updateSlotLimit(currentSlotLimit, refresh: false)
         cell.configure(with: date, events: events)
 
         // 检查是否有连续事件的开始位置，如果有，提升该 cell 的层级
