@@ -51,7 +51,7 @@ class MonthPageView: UIView {
     /// ViewModel
     var viewModel: MonthPageViewModel?
     private var cancellables = Set<AnyCancellable>()
-    private var monthSlotCache: [String: Int] = [:]
+    private var calendarHeightConstraint: Constraint?
 
     // MARK: - Callbacks
 
@@ -91,12 +91,14 @@ class MonthPageView: UIView {
         addSubview(calendarView)
         addSubview(tableView)
 
+        let initialHeight = calendarHeight(for: calendarView.currentPage)
+
         // 布局约束
         calendarView.snp.makeConstraints { make in
             make.leading.equalToSuperview().offset(5)
             make.trailing.equalToSuperview().offset(-5)
             make.top.equalToSuperview()
-            make.height.equalTo(450)  // 默认高度，会动态调整
+            calendarHeightConstraint = make.height.equalTo(initialHeight).constraint
         }
 
         tableView.snp.makeConstraints { make in
@@ -130,6 +132,7 @@ class MonthPageView: UIView {
         // 初始设置 - 不立即 reloadData，让 Combine 绑定来触发
         calendarView.setCurrentPage(viewModel.currentMonth, animated: false)
         calendarView.select(viewModel.selectedDate, scrollToDate: false)
+        calendarHeightConstraint?.update(offset: calendarHeight(for: viewModel.currentMonth))
     }
 
     private func setupBindings() {
@@ -144,7 +147,9 @@ class MonthPageView: UIView {
             .dropFirst() // 跳过初始值
             .sink { [weak self] month in
                 print("📅 [\(viewModel.monthTitle)] currentMonth changed, setCurrentPage")
-                self?.calendarView.setCurrentPage(month, animated: false)
+                guard let self = self else { return }
+                self.calendarView.setCurrentPage(month, animated: false)
+                self.calendarHeightConstraint?.update(offset: self.calendarHeight(for: month))
             }
             .store(in: &cancellables)
 
@@ -194,51 +199,9 @@ class MonthPageView: UIView {
 
     /// 更新日历高度
     func updateCalendarHeight(_ height: CGFloat) {
-        calendarView.snp.updateConstraints { make in
-            make.height.equalTo(height)
-        }
-        monthSlotCache.removeAll()
+        calendarHeightConstraint?.update(offset: height)
         layoutIfNeeded()
         onCalendarHeightChanged?(height)
-    }
-
-    private func maxVisibleSlots(forMonth month: Date) -> Int {
-        let key = monthKey(for: month)
-        if let cached = monthSlotCache[key] {
-            return cached
-        }
-
-        let rows = rowCount(for: month)
-        guard rows > 0 else {
-            monthSlotCache[key] = 0
-            return 0
-        }
-
-        let metrics = CustomCalendarCell.layoutMetrics
-        let containerHeight = containerHeightForSlotCalculation()
-        let cellHeight = containerHeight / CGFloat(rows)
-        let availableHeight = max(0, cellHeight - metrics.reservedHeight)
-
-        guard availableHeight > 0 else {
-            monthSlotCache[key] = 0
-            return 0
-        }
-
-        let slotHeight = metrics.eventSlotHeight
-        let spacing = metrics.eventSlotSpacing
-        let rawSlots = Int(floor((availableHeight + spacing) / (slotHeight + spacing)))
-        let result = max(1, rawSlots)
-
-        monthSlotCache[key] = result
-        return result
-    }
-
-    private func containerHeightForSlotCalculation() -> CGFloat {
-        if calendarView.scope == .week {
-            let height = calendarView.bounds.height
-            return height > 0 ? height : calendarView.maxHeight
-        }
-        return calendarView.maxHeight
     }
 
     private func rowCount(for month: Date) -> Int {
@@ -253,17 +216,27 @@ class MonthPageView: UIView {
 
         let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
         let firstWeekday = calendar.component(.weekday, from: firstDay)
-        let totalSlots = range.count + firstWeekday - 1
+        let calendarFirstWeekday = Int(calendarView.firstWeekday)
+        let leadingPlaceholders = (firstWeekday - calendarFirstWeekday + 7) % 7
+        let totalSlots = range.count + leadingPlaceholders
         let rows = Int(ceil(Double(totalSlots) / 7.0))
         return max(1, rows)
     }
 
-    private func monthKey(for month: Date) -> String {
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.year, .month], from: month)
-        let year = components.year ?? 0
-        let monthValue = components.month ?? 0
-        return String(format: "%04d-%02d", year, monthValue)
+    private func monthSlotLimit() -> Int {
+        return DeviceHelper.isPad || DeviceHelper.isLargeScreen ? 4 : 3
+    }
+
+    private func rowHeightForMonthMode() -> CGFloat {
+        let metrics = CustomCalendarCell.layoutMetrics
+        let slots = monthSlotLimit()
+        let slotHeight = CGFloat(slots) * metrics.eventSlotHeight
+        let spacing = CGFloat(max(slots - 1, 0)) * metrics.eventSlotSpacing
+        return metrics.reservedHeight + slotHeight + spacing
+    }
+
+    private func calendarHeight(for month: Date) -> CGFloat {
+        CGFloat(rowCount(for: month)) * rowHeightForMonthMode()
     }
 }
 
@@ -280,8 +253,7 @@ extension MonthPageView: FSCalendarDataSource {
             print("date.formatted():\(date.formatted())")
         }
 
-        let displayedMonth = calendar.currentPage
-        cell.maxVisibleSlots = maxVisibleSlots(forMonth: displayedMonth)
+        cell.maxVisibleSlots = monthSlotLimit()
 
         cell.configure(with: date, events: events)
 

@@ -423,37 +423,45 @@ class CustomCalendarCell: FSCalendarCell {
             return (event: event, position: position)
         }
 
-        // 计算可显示的最大条数
         let totalCount = eventsWithPosition.count
-        let effectiveMax = maxVisibleSlots > 0 ? maxVisibleSlots : maxEventCount
-        var displayCount = min(totalCount, effectiveMax)
+        let slotLimit = maxVisibleSlots > 0 ? maxVisibleSlots : maxEventCount
 
-        // 如果只剩1个事件未显示，直接显示它而不是显示 "+1"
-        if totalCount == effectiveMax + 1 {
-            displayCount = totalCount
-        }
+        guard slotLimit > 0 else { return }
 
         var displayItems: [EventDisplayItem] = []
-        for index in 0..<displayCount {
-            let item = eventsWithPosition[index]
-            displayItems.append(.event(item.event, item.position))
-        }
 
-        // 处理溢出事件
-        let remaining = totalCount - displayCount
-        if remaining >= 2 {
-            let remainingEvents = eventsWithPosition[displayCount..<totalCount]
-            let nonBlankRemaining = remainingEvents.filter { !$0.event.isBlank }.count
+        if totalCount <= slotLimit {
+            for item in eventsWithPosition {
+                displayItems.append(.event(item.event, item.position))
+            }
+        } else {
+            let eventSlots = max(slotLimit - 1, 0)
 
-            if nonBlankRemaining >= 2 {
-                displayItems.append(.overflow(nonBlankRemaining))
-            } else if nonBlankRemaining == 1,
-                      let lastNonBlankEvent = remainingEvents.first(where: { !$0.event.isBlank }) {
-                displayItems.append(.event(lastNonBlankEvent.event, lastNonBlankEvent.position))
+            if eventSlots > 0 {
+                for index in 0..<min(eventSlots, totalCount) {
+                    let item = eventsWithPosition[index]
+                    displayItems.append(.event(item.event, item.position))
+                }
+            }
+
+            let startIndex = min(eventSlots, totalCount)
+            if startIndex < totalCount {
+                let remainingSlice = eventsWithPosition[startIndex..<totalCount]
+                let nonBlankRemaining = remainingSlice.filter { !$0.event.isBlank }
+
+                if nonBlankRemaining.count >= 2 {
+                    displayItems.append(.overflow(nonBlankRemaining.count))
+                } else if nonBlankRemaining.count == 1,
+                          let lastNonBlankEvent = remainingSlice.first(where: { !$0.event.isBlank }) {
+                    displayItems.append(.event(lastNonBlankEvent.event, lastNonBlankEvent.position))
+                } else if let filler = remainingSlice.first,
+                          displayItems.count < slotLimit {
+                    displayItems.append(.event(filler.event, filler.position))
+                }
             }
         }
 
-        let targetCapacity = max(maxVisibleSlots, displayItems.count)
+        let targetCapacity = max(slotLimit, displayItems.count)
         prepareSlots(capacity: targetCapacity)
 
         for (index, item) in displayItems.enumerated() where index < eventSlots.count {
