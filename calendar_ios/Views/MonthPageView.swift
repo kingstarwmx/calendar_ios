@@ -51,6 +51,7 @@ class MonthPageView: UIView {
     /// ViewModel
     var viewModel: MonthPageViewModel?
     private var cancellables = Set<AnyCancellable>()
+    private var monthSlotCache: [String: Int] = [:]
 
     // MARK: - Callbacks
 
@@ -196,8 +197,73 @@ class MonthPageView: UIView {
         calendarView.snp.updateConstraints { make in
             make.height.equalTo(height)
         }
+        monthSlotCache.removeAll()
         layoutIfNeeded()
         onCalendarHeightChanged?(height)
+    }
+
+    private func maxVisibleSlots(forMonth month: Date) -> Int {
+        let key = monthKey(for: month)
+        if let cached = monthSlotCache[key] {
+            return cached
+        }
+
+        let rows = rowCount(for: month)
+        guard rows > 0 else {
+            monthSlotCache[key] = 0
+            return 0
+        }
+
+        let metrics = CustomCalendarCell.layoutMetrics
+        let containerHeight = containerHeightForSlotCalculation()
+        let cellHeight = containerHeight / CGFloat(rows)
+        let availableHeight = max(0, cellHeight - metrics.reservedHeight)
+
+        guard availableHeight > 0 else {
+            monthSlotCache[key] = 0
+            return 0
+        }
+
+        let slotHeight = metrics.eventSlotHeight
+        let spacing = metrics.eventSlotSpacing
+        let rawSlots = Int(floor((availableHeight + spacing) / (slotHeight + spacing)))
+        let result = max(1, rawSlots)
+
+        monthSlotCache[key] = result
+        return result
+    }
+
+    private func containerHeightForSlotCalculation() -> CGFloat {
+        if calendarView.scope == .week {
+            let height = calendarView.bounds.height
+            return height > 0 ? height : calendarView.maxHeight
+        }
+        return calendarView.maxHeight
+    }
+
+    private func rowCount(for month: Date) -> Int {
+        if calendarView.scope == .week {
+            return 1
+        }
+
+        let calendar = Calendar.current
+        guard let range = calendar.range(of: .day, in: .month, for: month) else {
+            return 6
+        }
+
+        let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
+        let firstWeekday = calendar.component(.weekday, from: firstDay)
+        let totalSlots = range.count + firstWeekday - 1
+        let rows = Int(ceil(Double(totalSlots) / 7.0))
+        return max(1, rows)
+    }
+
+    private func monthKey(for month: Date) -> String {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month], from: month)
+        let year = components.year ?? 0
+        let monthValue = components.month ?? 0
+        return String(format: "%04d-%02d", year, monthValue)
     }
 }
 
@@ -213,7 +279,10 @@ extension MonthPageView: FSCalendarDataSource {
         if date.formatted() == "10/9/2025, 00:00" {
             print("date.formatted():\(date.formatted())")
         }
-        
+
+        let displayedMonth = calendar.currentPage
+        cell.maxVisibleSlots = maxVisibleSlots(forMonth: displayedMonth)
+
         cell.configure(with: date, events: events)
 
         // 检查是否有连续事件的开始位置，如果有，提升该 cell 的层级

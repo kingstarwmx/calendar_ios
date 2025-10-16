@@ -8,6 +8,174 @@ struct EventPosition {
     let isEnd: Bool
 }
 
+private final class EventSlotView: UIView {
+
+    enum LabelMode {
+        case hidden
+        case extendLeading(text: String, color: UIColor)
+        case centered(text: String, color: UIColor)
+    }
+
+    private let eventBar = UIView()
+    private let textLabel: UILabel = {
+        let label = UILabel()
+        label.font = UIFont.systemFont(ofSize: 10, weight: .semibold)
+        label.clipsToBounds = false
+        label.isHidden = true
+        return label
+    }()
+
+    private let overflowBackground: UIView = {
+        let view = UIView()
+        view.layer.cornerRadius = 2
+        view.isHidden = true
+        return view
+    }()
+
+    private let overflowLabel: UILabel = {
+        let label = UILabel()
+        label.font = UIFont.systemFont(ofSize: 8, weight: .semibold)
+        label.textAlignment = .center
+        label.textColor = .label
+        return label
+    }()
+
+    init(slotHeight: CGFloat) {
+        super.init(frame: .zero)
+        setup(slotHeight: slotHeight)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup(slotHeight: CustomCalendarCell.layoutMetrics.eventSlotHeight)
+    }
+
+    private func setup(slotHeight: CGFloat) {
+        translatesAutoresizingMaskIntoConstraints = false
+        clipsToBounds = false
+        isHidden = true
+
+        snp.makeConstraints { make in
+            make.height.equalTo(slotHeight)
+        }
+
+        addSubview(eventBar)
+        eventBar.clipsToBounds = false
+        eventBar.isHidden = true
+        eventBar.layer.cornerRadius = 2
+
+        eventBar.snp.makeConstraints { make in
+            make.top.bottom.equalToSuperview()
+            make.leading.equalToSuperview().offset(2)
+            make.trailing.equalToSuperview().offset(-2)
+        }
+
+        eventBar.addSubview(textLabel)
+
+        addSubview(overflowBackground)
+        overflowBackground.snp.makeConstraints { make in
+            make.top.bottom.equalToSuperview()
+            make.leading.equalToSuperview().offset(2)
+            make.trailing.equalToSuperview().offset(-2)
+        }
+
+        overflowBackground.addSubview(overflowLabel)
+        overflowLabel.snp.makeConstraints { make in
+            make.center.equalToSuperview()
+        }
+
+        overflowBackground.isHidden = true
+    }
+
+    func configureBlank() {
+        isHidden = false
+        eventBar.isHidden = true
+        overflowBackground.isHidden = true
+        textLabel.isHidden = true
+        textLabel.text = nil
+        textLabel.tag = 0
+    }
+
+    func configureOverflow(count: Int) {
+        isHidden = false
+        eventBar.isHidden = true
+        overflowBackground.isHidden = false
+        overflowBackground.backgroundColor = UIColor.systemGray4.withAlphaComponent(0.2)
+        overflowLabel.text = "+\(count)"
+        textLabel.isHidden = true
+        textLabel.tag = 0
+    }
+
+    func configureEvent(with configuration: CustomCalendarCell.EventSlotConfiguration) {
+        isHidden = false
+        overflowBackground.isHidden = true
+        eventBar.isHidden = false
+
+        eventBar.backgroundColor = configuration.backgroundColor
+        eventBar.layer.cornerRadius = 2
+        eventBar.layer.maskedCorners = configuration.maskedCorners
+
+        eventBar.snp.remakeConstraints { make in
+            make.top.bottom.equalToSuperview()
+            make.leading.equalToSuperview().offset(configuration.leadingInset)
+            make.trailing.equalToSuperview().offset(configuration.trailingInset)
+        }
+
+        applyLabelMode(configuration.labelMode)
+    }
+
+    func reset() {
+        isHidden = true
+        eventBar.isHidden = true
+        overflowBackground.isHidden = true
+        textLabel.text = nil
+        textLabel.isHidden = true
+        textLabel.tag = 0
+        textLabel.layer.zPosition = 0
+    }
+
+    func elevateExtendedLabel() {
+        textLabel.layer.zPosition = textLabel.tag == 999 ? 9999 : 0
+    }
+
+    private func applyLabelMode(_ mode: LabelMode) {
+        switch mode {
+        case .hidden:
+            textLabel.isHidden = true
+            textLabel.tag = 0
+            textLabel.text = nil
+        case let .extendLeading(text, color):
+            textLabel.isHidden = false
+            textLabel.tag = 999
+            textLabel.text = text
+            textLabel.textColor = color
+            textLabel.textAlignment = .left
+            textLabel.numberOfLines = 1
+            textLabel.lineBreakMode = .byClipping
+
+            textLabel.snp.remakeConstraints { make in
+                make.centerY.equalToSuperview()
+                make.leading.equalToSuperview().offset(4)
+                make.width.greaterThanOrEqualTo(200)
+            }
+        case let .centered(text, color):
+            textLabel.isHidden = false
+            textLabel.tag = 0
+            textLabel.text = text
+            textLabel.textColor = color
+            textLabel.textAlignment = .center
+            textLabel.numberOfLines = 1
+            textLabel.lineBreakMode = .byTruncatingTail
+
+            textLabel.snp.remakeConstraints { make in
+                make.center.equalToSuperview()
+                make.leading.greaterThanOrEqualToSuperview().offset(2)
+                make.trailing.lessThanOrEqualToSuperview().offset(-2)
+            }
+        }
+    }
+}
+
 /// 自定义日历单元格
 /// 参考 Flutter 版本的 CalendarCell 布局
 class CustomCalendarCell: FSCalendarCell {
@@ -31,6 +199,19 @@ class CustomCalendarCell: FSCalendarCell {
         stackView.isLayoutMarginsRelativeArrangement = false  // 禁用内边距
         return stackView
     }()
+
+    private enum EventDisplayItem {
+        case event(Event, EventPosition)
+        case overflow(Int)
+    }
+
+    fileprivate struct EventSlotConfiguration {
+        let backgroundColor: UIColor
+        let leadingInset: CGFloat
+        let trailingInset: CGFloat
+        let maskedCorners: CACornerMask
+        let labelMode: EventSlotView.LabelMode
+    }
 
     /// 选中状态的 shapeLayer（实线描边）
     private let selectedShapeLayer: CAShapeLayer = {
@@ -61,8 +242,44 @@ class CustomCalendarCell: FSCalendarCell {
         return view
     }()
 
-    /// 最大显示事件数
+
+    /// 布局相关常量
+    struct LayoutMetrics {
+        let separatorHeight: CGFloat
+        let titleTopInset: CGFloat
+        let titleHeight: CGFloat
+        let eventSlotHeight: CGFloat
+        let eventSlotSpacing: CGFloat
+
+        var reservedHeight: CGFloat {
+            separatorHeight + titleTopInset + titleHeight
+        }
+    }
+
+    static let layoutMetrics = LayoutMetrics(
+        separatorHeight: 1.0 / UIScreen.main.scale,
+        titleTopInset: 2,
+        titleHeight: 24,
+        eventSlotHeight: 14,
+        eventSlotSpacing: 1
+    )
+
+    /// 最大显示事件数（默认值，若未设置 maxVisibleSlots 时使用）
     private let maxEventCount = 3
+
+    /// 理论上可显示的最大色块数量（由外部根据高度计算后传入）
+    var maxVisibleSlots: Int = 0 {
+        didSet {
+            if maxVisibleSlots < 0 {
+                maxVisibleSlots = 0
+                return
+            }
+            prepareSlots(capacity: max(maxVisibleSlots, eventSlots.count))
+        }
+    }
+
+    /// 事件槽位池
+    private var eventSlots: [EventSlotView] = []
 
     /// 当前事件列表（用于配置）
     private var currentEvents: [Event] = []
@@ -127,16 +344,7 @@ class CustomCalendarCell: FSCalendarCell {
         super.layoutSubviews()
 
         // 查找并提升所有标记为999的label的层级
-        eventsStackView.subviews.forEach { container in
-            container.subviews.forEach { eventBar in
-                eventBar.subviews.forEach { view in
-                    if view.tag == 999 {
-                        // 这是需要延伸的文字label，提升其层级
-                        view.layer.zPosition = 9999
-                    }
-                }
-            }
-        }
+        eventSlots.forEach { $0.elevateExtendedLabel() }
 
         // 更新 shapeLayer 的路径
         let cornerRadius: CGFloat = 8
@@ -189,6 +397,11 @@ class CustomCalendarCell: FSCalendarCell {
         }
     }
 
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        resetSlots()
+    }
+
     /// 配置单元格数据
     func configure(with date: Date, events: [Event]) {
         self.currentDate = date
@@ -200,301 +413,196 @@ class CustomCalendarCell: FSCalendarCell {
 
     /// 配置事件显示
     private func configureEvents(events: [Event], date: Date) {
-        // 清空现有事件视图
-        eventsStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        resetSlots()
 
         guard !events.isEmpty else { return }
 
         // 为每个事件添加位置信息
-        // 注意：events 已经在 ViewModel 中排序好了，这里不需要再排序
         let eventsWithPosition = events.map { event -> (event: Event, position: EventPosition) in
             let position = getEventPosition(for: event, on: date)
             return (event: event, position: position)
         }
 
-        // 计算实际显示的事件数量
+        // 计算可显示的最大条数
         let totalCount = eventsWithPosition.count
-        var displayCount = min(totalCount, maxEventCount)
+        let effectiveMax = maxVisibleSlots > 0 ? maxVisibleSlots : maxEventCount
+        var displayCount = min(totalCount, effectiveMax)
 
-        // 如果只剩1个事件未显示，直接显示它而不是显示"+1"
-        if totalCount == maxEventCount + 1 {
-            displayCount = totalCount  // 显示所有4个事件
+        // 如果只剩1个事件未显示，直接显示它而不是显示 "+1"
+        if totalCount == effectiveMax + 1 {
+            displayCount = totalCount
         }
 
-        // 显示事件
-        for i in 0..<displayCount {
-            let item = eventsWithPosition[i]
-            let eventBar = createEventBar(for: item.event, date: date, position: item.position)
-            eventsStackView.addArrangedSubview(eventBar)
+        var displayItems: [EventDisplayItem] = []
+        for index in 0..<displayCount {
+            let item = eventsWithPosition[index]
+            displayItems.append(.event(item.event, item.position))
         }
 
-        // 如果还有2个或更多事件未显示，显示 "+n" 指示器
+        // 处理溢出事件
         let remaining = totalCount - displayCount
         if remaining >= 2 {
-            // 计算剩余事件中非空白事件的数量
             let remainingEvents = eventsWithPosition[displayCount..<totalCount]
             let nonBlankRemaining = remainingEvents.filter { !$0.event.isBlank }.count
 
-            // 只有当剩余的非空白事件 >= 2 时才显示 "+n"
             if nonBlankRemaining >= 2 {
-                let overflowIndicator = createOverflowIndicator(count: nonBlankRemaining)
-                eventsStackView.addArrangedSubview(overflowIndicator)
-            } else if nonBlankRemaining == 1 {
-                // 如果只剩1个非空白事件，找到它并显示
-                if let lastNonBlankEvent = remainingEvents.first(where: { !$0.event.isBlank }) {
-                    let eventBar = createEventBar(for: lastNonBlankEvent.event, date: date, position: lastNonBlankEvent.position)
-                    eventsStackView.addArrangedSubview(eventBar)
-                }
+                displayItems.append(.overflow(nonBlankRemaining))
+            } else if nonBlankRemaining == 1,
+                      let lastNonBlankEvent = remainingEvents.first(where: { !$0.event.isBlank }) {
+                displayItems.append(.event(lastNonBlankEvent.event, lastNonBlankEvent.position))
+            }
+        }
+
+        let targetCapacity = max(maxVisibleSlots, displayItems.count)
+        prepareSlots(capacity: targetCapacity)
+
+        for (index, item) in displayItems.enumerated() where index < eventSlots.count {
+            let slot = eventSlots[index]
+            switch item {
+            case let .event(event, position):
+                configure(slot: slot, with: event, position: position, on: date)
+            case let .overflow(count):
+                slot.configureOverflow(count: count)
+            }
+        }
+
+        if displayItems.count < eventSlots.count {
+            for index in displayItems.count..<eventSlots.count {
+                eventSlots[index].reset()
             }
         }
     }
 
-    /// 创建事件条
-    private func createEventBar(for event: Event, date: Date, position: EventPosition) -> UIView {
-        // 如果是空白事件，返回透明的占位视图
+    /// 准备槽位池
+    private func prepareSlots(capacity: Int) {
+        guard capacity > eventSlots.count else { return }
+
+        let metrics = CustomCalendarCell.layoutMetrics
+        for _ in eventSlots.count..<capacity {
+            let slot = EventSlotView(slotHeight: metrics.eventSlotHeight)
+            eventsStackView.addArrangedSubview(slot)
+            slot.reset()
+            eventSlots.append(slot)
+        }
+    }
+
+    /// 重置所有槽位
+    private func resetSlots() {
+        eventSlots.forEach { $0.reset() }
+    }
+
+    /// 配置单个槽位
+    private func configure(slot: EventSlotView, with event: Event, position: EventPosition, on date: Date) {
         if event.isBlank {
-            let container = UIView()
-            container.snp.makeConstraints { make in
-                make.height.equalTo(14)
-            }
-            container.backgroundColor = .clear
-            return container
+            slot.configureBlank()
+            return
         }
 
-        // 获取事件颜色并降低饱和度
         let originalColor = event.customColor ?? .systemBlue
-        let eventColor = desaturateColor(originalColor, by: 0.3) // 降低30%饱和度
+        let baseColor = desaturateColor(originalColor, by: 0.3)
 
+        if event.title.contains("国庆") {
+            let calendar = Calendar.current
+            let currentDate = calendar.startOfDay(for: date)
+            print("🎨 创建国庆节事件条:")
+            print("   日期: \(currentDate)")
+            print("   position: start=\(position.isStart), middle=\(position.isMiddle), end=\(position.isEnd)")
+        }
+
+        let configuration = makeEventConfiguration(for: event,
+                                                    position: position,
+                                                    date: date,
+                                                    baseColor: baseColor)
+
+        slot.configureEvent(with: configuration)
+    }
+
+    private func makeEventConfiguration(for event: Event,
+                                        position: EventPosition,
+                                        date: Date,
+                                        baseColor: UIColor) -> EventSlotConfiguration {
         let calendar = Calendar.current
         let currentDate = calendar.startOfDay(for: date)
 
-        // 判断是否为真正的多天事件
         let isSingleDay = !isMultiDayEvent(event)
+        let shouldExtendToEdges = !isSingleDay && (
+            position.isMiddle ||
+            (position.isStart && !position.isEnd) ||
+            (position.isEnd && !position.isStart)
+        )
 
-        // 判断是否延伸到边缘（连续事件的中间部分或开始/结束的连接部分）
-        let shouldExtendToEdges = !isSingleDay && (position.isMiddle ||
-                                                   (position.isStart && !position.isEnd) ||
-                                                   (position.isEnd && !position.isStart))
+        let weekday = calendar.component(.weekday, from: currentDate)
+        let firstWeekday = calendar.firstWeekday
+        let lastWeekday = firstWeekday == 1 ? 7 : firstWeekday - 1
 
-        // 调试国庆节事件
-        if event.title.contains("国庆") {
-            print("🎨 创建国庆节事件条:")
-            print("   日期: \(currentDate)")
-            print("   isSingleDay: \(isSingleDay)")
-            print("   position: start=\(position.isStart), middle=\(position.isMiddle), end=\(position.isEnd)")
-            print("   shouldExtendToEdges: \(shouldExtendToEdges)")
-        }
-
-        // 创建事件条视图
-        let eventBar = UIView()
-        // 降低透明度到0.6，让色块更柔和
-        eventBar.backgroundColor = eventColor.withAlphaComponent(0.6)
+        var visualStart = true
+        var visualEnd = true
 
         if shouldExtendToEdges {
-            // 连续事件：创建一个容器来允许超出边界
-            let container = UIView()
-            container.clipsToBounds = false  // 允许子视图超出边界
-            container.snp.makeConstraints { make in
-                make.height.equalTo(14)
-            }
-
-            container.addSubview(eventBar)
-            eventBar.clipsToBounds = false  // 允许事件条的内容（文字）超出边界
-
-            // 根据位置决定延伸方向
-            let calendar = Calendar.current
-            let weekday = calendar.component(.weekday, from: currentDate)
-
-            // 获取一周的开始和结束（根据系统设置）
-            // FSCalendar的firstWeekday: 1=周日, 2=周一, etc.
-            let firstWeekday = calendar.firstWeekday  // 系统设置的一周开始
-            let lastWeekday = firstWeekday == 1 ? 7 : firstWeekday - 1  // 一周的最后一天
-
-            let isWeekStart = (weekday == firstWeekday)  // 一周的开始
-            let isWeekEnd = (weekday == lastWeekday)     // 一周的结束
-
-            // 判断实际的视觉位置
-            let visualStart = position.isStart || isWeekStart  // 事件开始或每周开始
-            let visualEnd = position.isEnd || isWeekEnd        // 事件结束或每周结束
-
-            eventBar.snp.makeConstraints { make in
-                make.top.bottom.equalToSuperview()
-
-                if visualStart && !visualEnd {
-                    // 视觉开始位置：左边正常（有内边距），右边延伸
-                    make.leading.equalToSuperview().offset(2)
-                    make.trailing.equalToSuperview()  // 右边延伸到边缘
-                } else if visualEnd && !visualStart {
-                    // 视觉结束位置：左边延伸，右边正常（有内边距）
-                    make.leading.equalToSuperview()  // 左边延伸到边缘
-                    make.trailing.equalToSuperview().offset(-2)
-                } else if !visualStart && !visualEnd {
-                    // 中间位置：两边都延伸
-                    make.leading.equalToSuperview()  // 左边延伸到边缘
-                    make.trailing.equalToSuperview()  // 右边延伸到边缘
-                } else {
-                    // 单独的一天（一周的开始同时也是结束，比如只有一天的事件）
-                    make.leading.equalToSuperview().offset(2)
-                    make.trailing.equalToSuperview().offset(-2)
-                }
-            }
-
-            // 设置圆角：根据视觉位置决定哪边有圆角
-            eventBar.layer.cornerRadius = 2
-            eventBar.layer.maskedCorners = []
-
-            if visualStart {
-                // 视觉开始位置：左边有圆角
-                eventBar.layer.maskedCorners.insert([.layerMinXMinYCorner, .layerMinXMaxYCorner])
-            }
-            if visualEnd {
-                // 视觉结束位置：右边有圆角
-                eventBar.layer.maskedCorners.insert([.layerMaxXMinYCorner, .layerMaxXMaxYCorner])
-            }
-
-            // 判断是否显示文字
-            let shouldShowText = shouldShowEventText(event: event, date: date, position: position)
-            if shouldShowText {
-                let label = UILabel()
-                label.text = event.title
-                label.font = UIFont.systemFont(ofSize: 10, weight: .semibold)
-                label.textColor = getTextColor(for: eventColor)
-
-                // 对于连续事件的开始位置或每周的视觉开始位置，允许文字延伸
-                // 需要文字延伸的情况：
-                // 1. 事件真正的开始且是多天事件
-                // 2. 每周的视觉开始（周日）且不是事件的最后一天
-                let needExtendText = (position.isStart && !position.isEnd) ||
-                                   (visualStart && !position.isEnd)
-                if needExtendText {
-                    // 连续事件开始或跨周后的开始：文字左对齐，可以延伸到右边
-                    label.textAlignment = .left
-                    label.lineBreakMode = .byClipping  // 不截断文字，允许超出边界
-                    label.clipsToBounds = false  // 允许内容超出边界
-                    label.tag = 999  // 标记需要提升层级的label
-
-                    eventBar.addSubview(label)
-                    label.snp.makeConstraints { make in
-                        make.centerY.equalToSuperview()
-                        make.leading.equalToSuperview().offset(4)
-                        // 不限制trailing，让文字可以延伸
-                        make.width.greaterThanOrEqualTo(200)  // 给足够的宽度显示长文字
-                    }
-                } else if visualStart && visualEnd {
-                    // 一周内的单独一天，或跨周的开始同时也是结束
-                    label.textAlignment = .center
-                    label.numberOfLines = 1
-                    eventBar.addSubview(label)
-
-                    label.snp.makeConstraints { make in
-                        make.center.equalToSuperview()
-                        make.leading.greaterThanOrEqualToSuperview().offset(2)
-                        make.trailing.lessThanOrEqualToSuperview().offset(-2)
-                    }
-                } else {
-                    // 其他情况：居中显示
-                    label.textAlignment = .center
-                    label.numberOfLines = 1
-                    eventBar.addSubview(label)
-
-                    label.snp.makeConstraints { make in
-                        make.center.equalToSuperview()
-                        make.leading.greaterThanOrEqualToSuperview().offset(2)
-                        make.trailing.lessThanOrEqualToSuperview().offset(-2)
-                    }
-                }
-            }
-
-            return container
-        } else {
-            // 单天事件：创建带内边距的容器
-            let container = UIView()
-            container.snp.makeConstraints { make in
-                make.height.equalTo(14)
-            }
-
-            container.addSubview(eventBar)
-            eventBar.snp.makeConstraints { make in
-                make.top.bottom.equalToSuperview()
-                make.leading.equalToSuperview().offset(2)  // 单天事件有内边距
-                make.trailing.equalToSuperview().offset(-2)  // 单天事件有内边距
-            }
-            eventBar.layer.cornerRadius = 2
-
-            // 判断是否显示文字：基于位置信息
-            let shouldShowText = shouldShowEventText(event: event, date: date, position: position)
-
-            if shouldShowText {
-                let label = UILabel()
-                label.text = event.title
-                label.font = UIFont.systemFont(ofSize: 10, weight: .semibold)
-                label.textColor = getTextColor(for: eventColor)
-
-                // 对于连续事件的开始位置，允许文字延伸
-                if position.isStart && !position.isEnd {
-                    // 连续事件开始：文字左对齐，可以延伸到右边
-                    label.textAlignment = .left
-                    label.lineBreakMode = .byClipping  // 不截断文字，允许超出边界
-                    label.clipsToBounds = false  // 允许内容超出边界
-                    label.tag = 999  // 标记需要提升层级的label
-
-                    eventBar.addSubview(label)
-                    label.snp.makeConstraints { make in
-                        make.centerY.equalToSuperview()
-                        make.leading.equalToSuperview().offset(4)
-                        // 不限制trailing，让文字可以延伸
-                        make.width.greaterThanOrEqualTo(200)  // 给足够的宽度显示长文字
-                    }
-                } else {
-                    // 单天事件或其他情况：居中显示
-                    label.textAlignment = .center
-                    label.numberOfLines = 1
-                    eventBar.addSubview(label)
-
-                    label.snp.makeConstraints { make in
-                        make.center.equalToSuperview()
-                        make.leading.greaterThanOrEqualToSuperview().offset(2)
-                        make.trailing.lessThanOrEqualToSuperview().offset(-2)
-                    }
-                }
-            }
-
-            return container
+            visualStart = position.isStart || weekday == firstWeekday
+            visualEnd = position.isEnd || weekday == lastWeekday
         }
+
+        if event.title.contains("国庆") {
+            print("   isSingleDay: \(isSingleDay)")
+            print("   shouldExtendToEdges: \(shouldExtendToEdges)")
+            print("   visualStart: \(visualStart), visualEnd: \(visualEnd)")
+        }
+
+        let defaultCorners: CACornerMask = [
+            .layerMinXMinYCorner,
+            .layerMinXMaxYCorner,
+            .layerMaxXMinYCorner,
+            .layerMaxXMaxYCorner
+        ]
+
+        let layout = shouldExtendToEdges
+            ? layoutForExtendedEvent(visualStart: visualStart, visualEnd: visualEnd)
+            : (leading: CGFloat(2), trailing: CGFloat(-2), maskedCorners: defaultCorners)
+
+        let shouldShowText = shouldShowEventText(event: event, date: date, position: position)
+        let textColor = getTextColor(for: baseColor)
+
+        var labelMode: EventSlotView.LabelMode = .hidden
+
+        if shouldShowText {
+            if shouldExtendToEdges {
+                let needExtendText = (position.isStart && !position.isEnd) || (visualStart && !position.isEnd)
+                if needExtendText {
+                    labelMode = .extendLeading(text: event.title, color: textColor)
+                } else {
+                    labelMode = .centered(text: event.title, color: textColor)
+                }
+            } else if position.isStart && !position.isEnd {
+                labelMode = .extendLeading(text: event.title, color: textColor)
+            } else {
+                labelMode = .centered(text: event.title, color: textColor)
+            }
+        }
+
+        return EventSlotConfiguration(
+            backgroundColor: baseColor.withAlphaComponent(0.6),
+            leadingInset: layout.leading,
+            trailingInset: layout.trailing,
+            maskedCorners: layout.maskedCorners,
+            labelMode: labelMode
+        )
     }
 
-    /// 创建溢出指示器 "+n"
-    private func createOverflowIndicator(count: Int) -> UIView {
-        let container = UIView()
-        container.snp.makeConstraints { make in
-            make.height.equalTo(14)
+    private func layoutForExtendedEvent(visualStart: Bool,
+                                        visualEnd: Bool) -> (leading: CGFloat, trailing: CGFloat, maskedCorners: CACornerMask) {
+        switch (visualStart, visualEnd) {
+        case (true, false):
+            return (leading: 2, trailing: 0, maskedCorners: [.layerMinXMinYCorner, .layerMinXMaxYCorner])
+        case (false, true):
+            return (leading: 0, trailing: -2, maskedCorners: [.layerMaxXMinYCorner, .layerMaxXMaxYCorner])
+        case (false, false):
+            return (leading: 0, trailing: 0, maskedCorners: [])
+        case (true, true):
+            return (leading: 2,
+                    trailing: -2,
+                    maskedCorners: [.layerMinXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMinYCorner, .layerMaxXMaxYCorner])
         }
-
-        let indicator = UIView()
-        // 降低透明度，与事件条保持一致的视觉效果
-        indicator.backgroundColor = UIColor.systemGray4.withAlphaComponent(0.2)
-        indicator.layer.cornerRadius = 2
-        container.addSubview(indicator)
-
-        indicator.snp.makeConstraints { make in
-            make.top.equalToSuperview()
-            make.bottom.equalToSuperview()
-            make.leading.equalToSuperview().offset(2)  // 溢出指示器有内边距
-            make.trailing.equalToSuperview().offset(-2)  // 溢出指示器有内边距
-        }
-
-        let label = UILabel()
-        label.text = "+\(count)"
-        label.font = UIFont.systemFont(ofSize: 8, weight: .semibold)
-        label.textColor = .label
-        label.textAlignment = .center
-        indicator.addSubview(label)
-
-        label.snp.makeConstraints { make in
-            make.center.equalToSuperview()
-        }
-
-        return container
     }
 
     /// 判断是否为多天事件
