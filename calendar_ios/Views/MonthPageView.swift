@@ -245,7 +245,7 @@ class MonthPageView: UIView {
         let metrics = CustomCalendarCell.layoutMetrics
         let slots = baselineSlotLimit()
         let slotHeight = CGFloat(slots) * metrics.eventSlotHeight
-        let spacing = CGFloat(max(slots - 1, 0)) * metrics.eventSlotSpacing
+        let spacing = CGFloat(max(slots, 0)) * metrics.eventSlotSpacing
         return metrics.reservedHeight + slotHeight + spacing
     }
 
@@ -293,9 +293,7 @@ extension MonthPageView: FSCalendarDataSource {
 
         // 从 ViewModel 获取事件
         let events = viewModel?.events(for: date) ?? []
-        if date.formatted() == "10/9/2025, 00:00" {
-            print("date.formatted():\(date.formatted())")
-        }
+       
         
 
         cell.updateSlotLimit(currentSlotLimit, refresh: false)
@@ -305,6 +303,12 @@ extension MonthPageView: FSCalendarDataSource {
         for event in events {
             if isMultiDayEventStart(event: event, date: date) {
                 // 这个 cell 包含连续事件的开始，提升其层级
+                if date.formatted() == "10/26/2025, 00:00" {
+                    print("date.formatted():\(date.formatted())")
+                }
+                if date.formatted() == "10/27/2025, 00:00" {
+                    print("date.formatted():\(date.formatted())")
+                }
                 cell.layer.zPosition = 100
                 // 确保 cell 的内容可以超出边界
                 cell.clipsToBounds = false

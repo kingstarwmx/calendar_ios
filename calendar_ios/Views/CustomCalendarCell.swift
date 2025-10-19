@@ -1,5 +1,4 @@
 import UIKit
-import SnapKit
 
 /// 事件位置信息
 struct EventPosition {
@@ -16,7 +15,18 @@ private final class EventSlotView: UIView {
         case centered(text: String, color: UIColor)
     }
 
+    private enum Mode {
+        case hidden
+        case blank
+        case overflow
+        case event
+    }
+
     private let slotHeight: CGFloat
+    private var mode: Mode = .hidden
+    private var currentConfiguration: CustomCalendarCell.EventSlotConfiguration?
+    private var currentLabelMode: LabelMode = .hidden
+
     private(set) var isActive = false
 
     private let eventBar = UIView()
@@ -67,78 +77,55 @@ private final class EventSlotView: UIView {
         eventBar.isHidden = true
         eventBar.layer.cornerRadius = 2
 
-        eventBar.snp.makeConstraints { make in
-            make.top.bottom.equalToSuperview()
-            make.leading.equalToSuperview().offset(2)
-            make.trailing.equalToSuperview().offset(-2)
-        }
-
         eventBar.addSubview(textLabel)
 
         addSubview(overflowBackground)
-        overflowBackground.snp.makeConstraints { make in
-            make.top.bottom.equalToSuperview()
-            make.leading.equalToSuperview().offset(2)
-            make.trailing.equalToSuperview().offset(-2)
-        }
-
         overflowBackground.addSubview(overflowLabel)
-        overflowLabel.snp.makeConstraints { make in
-            make.center.equalToSuperview()
-        }
-
         overflowBackground.isHidden = true
     }
 
     func configureBlank() {
         isHidden = false
         isActive = true
-        eventBar.isHidden = true
-        overflowBackground.isHidden = true
-        textLabel.isHidden = true
+        mode = .blank
         textLabel.text = nil
         textLabel.tag = 0
+        currentLabelMode = .hidden
+        setNeedsLayout()
     }
 
     func configureOverflow(count: Int) {
         isHidden = false
         isActive = true
-        eventBar.isHidden = true
-        overflowBackground.isHidden = false
+        mode = .overflow
         overflowBackground.backgroundColor = UIColor.systemGray4.withAlphaComponent(0.2)
         overflowLabel.text = "+\(count)"
-        textLabel.isHidden = true
-        textLabel.tag = 0
+        currentLabelMode = .hidden
+        setNeedsLayout()
     }
 
     func configureEvent(with configuration: CustomCalendarCell.EventSlotConfiguration) {
         isHidden = false
         isActive = true
-        overflowBackground.isHidden = true
-        eventBar.isHidden = false
-
+        mode = .event
+        currentConfiguration = configuration
         eventBar.backgroundColor = configuration.backgroundColor
         eventBar.layer.cornerRadius = 2
         eventBar.layer.maskedCorners = configuration.maskedCorners
-
-        eventBar.snp.remakeConstraints { make in
-            make.top.bottom.equalToSuperview()
-            make.leading.equalToSuperview().offset(configuration.leadingInset)
-            make.trailing.equalToSuperview().offset(configuration.trailingInset)
-        }
-
         applyLabelMode(configuration.labelMode)
+        setNeedsLayout()
     }
 
     func reset() {
         isHidden = true
         isActive = false
-        eventBar.isHidden = true
-        overflowBackground.isHidden = true
+        mode = .hidden
+        currentConfiguration = nil
+        currentLabelMode = .hidden
         textLabel.text = nil
-        textLabel.isHidden = true
         textLabel.tag = 0
         textLabel.layer.zPosition = 0
+        setNeedsLayout()
     }
 
     func elevateExtendedLabel() {
@@ -146,6 +133,7 @@ private final class EventSlotView: UIView {
     }
 
     private func applyLabelMode(_ mode: LabelMode) {
+        currentLabelMode = mode
         switch mode {
         case .hidden:
             textLabel.isHidden = true
@@ -159,12 +147,6 @@ private final class EventSlotView: UIView {
             textLabel.textAlignment = .left
             textLabel.numberOfLines = 1
             textLabel.lineBreakMode = .byClipping
-
-            textLabel.snp.remakeConstraints { make in
-                make.centerY.equalToSuperview()
-                make.leading.equalToSuperview().offset(4)
-                make.width.greaterThanOrEqualTo(200)
-            }
         case let .centered(text, color):
             textLabel.isHidden = false
             textLabel.tag = 0
@@ -173,11 +155,60 @@ private final class EventSlotView: UIView {
             textLabel.textAlignment = .center
             textLabel.numberOfLines = 1
             textLabel.lineBreakMode = .byTruncatingTail
+        }
+    }
 
-            textLabel.snp.remakeConstraints { make in
-                make.center.equalToSuperview()
-                make.leading.greaterThanOrEqualToSuperview().offset(2)
-                make.trailing.lessThanOrEqualToSuperview().offset(-2)
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        let width = bounds.width
+        let height = bounds.height
+
+        switch mode {
+        case .hidden:
+            eventBar.isHidden = true
+            overflowBackground.isHidden = true
+        case .blank:
+            eventBar.isHidden = true
+            overflowBackground.isHidden = true
+        case .overflow:
+            eventBar.isHidden = true
+            overflowBackground.isHidden = false
+            let inset: CGFloat = 2
+            let overflowWidth = max(0, width - inset * 2)
+            overflowBackground.frame = CGRect(x: inset, y: 0, width: overflowWidth, height: height)
+            overflowLabel.frame = overflowBackground.bounds
+        case .event:
+            guard let configuration = currentConfiguration else {
+                eventBar.isHidden = true
+                overflowBackground.isHidden = true
+                return
+            }
+
+            overflowBackground.isHidden = true
+            eventBar.isHidden = false
+
+            let leading = configuration.leadingInset
+            let trailing = configuration.trailingInset
+            let availableWidth = max(0, width - leading - trailing)
+            eventBar.frame = CGRect(x: leading, y: 0, width: availableWidth, height: height)
+
+            switch currentLabelMode {
+            case .hidden:
+                textLabel.isHidden = true
+            case .extendLeading:
+                textLabel.isHidden = false
+                let desiredWidth = textLabel.sizeThatFits(CGSize(width: .greatestFiniteMagnitude, height: height)).width
+                let baseWidth = max(0, availableWidth - 4)
+                let widthWithPadding = max(baseWidth, desiredWidth)
+                textLabel.frame = CGRect(x: 4, y: 0, width: widthWithPadding, height: height)
+            case .centered:
+                textLabel.isHidden = false
+                let available = max(0, availableWidth - 4)
+                let desired = textLabel.sizeThatFits(CGSize(width: .greatestFiniteMagnitude, height: height)).width
+                let finalWidth = min(available, desired)
+                let xOffset = 2 + (available - finalWidth) / 2
+                textLabel.frame = CGRect(x: xOffset, y: 0, width: finalWidth, height: height)
             }
         }
     }
@@ -281,6 +312,8 @@ class CustomCalendarCell: FSCalendarCell {
 
     /// 事件槽位池
     private var eventSlots: [EventSlotView] = []
+    private var maxSlotCapacity: Int = 0
+    private var containerHeight: CGFloat = 0
 
     /// 当前事件列表（用于配置）
     private var currentEvents: [Event] = []
@@ -318,30 +351,25 @@ class CustomCalendarCell: FSCalendarCell {
         contentView.addSubview(customTitleLabel)
         contentView.addSubview(eventsContainerView)
 
-        // 设置约束
-        topSeparatorView.snp.makeConstraints { make in
-            make.top.equalToSuperview()
-            make.leading.equalToSuperview()
-            make.trailing.equalToSuperview()
-            make.height.equalTo(1.0 / UIScreen.main.scale)  // 标准分割线高度（1像素）
-        }
-
-        customTitleLabel.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(2)
-            make.leading.trailing.equalToSuperview()
-            make.height.equalTo(24)
-        }
-
-        eventsContainerView.snp.makeConstraints { make in
-            make.top.equalTo(customTitleLabel.snp.bottom)
-            make.leading.trailing.equalToSuperview()
-            make.bottom.lessThanOrEqualToSuperview()
-        }
+        // 布局由 layoutSubviews 管理，不使用自动布局约束
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
 
+        let metrics = CustomCalendarCell.layoutMetrics
+        let contentBounds = contentView.bounds
+
+        let separatorHeight = metrics.separatorHeight
+        topSeparatorView.frame = CGRect(x: 0, y: 0, width: contentBounds.width, height: separatorHeight)
+
+        let titleY = separatorHeight + metrics.titleTopInset
+        customTitleLabel.frame = CGRect(x: 0, y: titleY, width: contentBounds.width, height: metrics.titleHeight)
+
+        let containerY = titleY + metrics.titleHeight
+        let containerH = resolvedContainerHeight()
+        eventsContainerView.frame = CGRect(x: 0, y: containerY, width: contentBounds.width, height: containerH)
+        print("")
         layoutEventSlots()
 
         // 查找并提升所有标记为999的label的层级
@@ -349,8 +377,8 @@ class CustomCalendarCell: FSCalendarCell {
 
         // 更新 shapeLayer 的路径
         let cornerRadius: CGFloat = 8
-        let bounds = contentView.bounds.insetBy(dx: 1, dy: 1)
-        let path = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius)
+        let insetBounds = contentBounds.insetBy(dx: 1, dy: 1)
+        let path = UIBezierPath(roundedRect: insetBounds, cornerRadius: cornerRadius)
 
         selectedShapeLayer.path = path.cgPath
         todayShapeLayer.path = path.cgPath
@@ -417,6 +445,7 @@ class CustomCalendarCell: FSCalendarCell {
         let normalized = max(0, limit)
         guard normalized != maxVisibleSlots else { return }
         maxVisibleSlots = normalized
+        updateContainerHeightCapacity(maxVisibleSlots)
         if refresh {
             configureEvents(events: currentEvents, date: currentDate)
         }
@@ -427,6 +456,10 @@ class CustomCalendarCell: FSCalendarCell {
         resetSlots()
 
         guard !events.isEmpty else { return }
+        
+        if currentDate.formatted() == "10/6/2025, 00:00" {
+            print("date.formatted():\(date.formatted())")
+        }
 
         // 为每个事件添加位置信息
         let eventsWithPosition = events.map { event -> (event: Event, position: EventPosition) in
@@ -508,6 +541,8 @@ class CustomCalendarCell: FSCalendarCell {
             slot.reset()
             eventSlots.append(slot)
         }
+
+        updateContainerHeightCapacity(eventSlots.count)
     }
 
     /// 重置所有槽位
@@ -555,7 +590,42 @@ class CustomCalendarCell: FSCalendarCell {
                 slot.isHidden = true
                 slot.frame = CGRect(x: 0, y: currentY, width: width, height: 0)
             }
+            slot.setNeedsLayout()
+            slot.layoutIfNeeded()
         }
+    }
+
+    private func updateContainerHeightCapacity(_ capacity: Int) {
+        guard capacity > maxSlotCapacity else { return }
+        maxSlotCapacity = capacity
+
+        let metrics = CustomCalendarCell.layoutMetrics
+        if maxSlotCapacity == 0 {
+            containerHeight = 0
+            setNeedsLayout()
+            return
+        }
+
+        let totalHeight = CGFloat(maxSlotCapacity) * metrics.eventSlotHeight +
+            CGFloat(max(maxSlotCapacity - 1, 0)) * metrics.eventSlotSpacing +
+            metrics.eventSlotSpacing
+        containerHeight = totalHeight
+        eventsContainerView.setNeedsLayout()
+        setNeedsLayout()
+    }
+
+    private func resolvedContainerHeight() -> CGFloat {
+        if containerHeight > 0 {
+            return containerHeight
+        }
+
+        let metrics = CustomCalendarCell.layoutMetrics
+        let baselineCapacity = max(maxSlotCapacity, max(maxVisibleSlots, eventSlots.count))
+        guard baselineCapacity > 0 else { return 0 }
+
+        return CGFloat(baselineCapacity) * metrics.eventSlotHeight +
+            CGFloat(max(baselineCapacity - 1, 0)) * metrics.eventSlotSpacing +
+            metrics.eventSlotSpacing
     }
 
     private func makeEventConfiguration(for event: Event,
@@ -593,7 +663,7 @@ class CustomCalendarCell: FSCalendarCell {
 
         let layout = shouldExtendToEdges
             ? layoutForExtendedEvent(visualStart: visualStart, visualEnd: visualEnd)
-            : (leading: CGFloat(2), trailing: CGFloat(-2), maskedCorners: defaultCorners)
+            : (leading: CGFloat(2), trailing: CGFloat(2), maskedCorners: defaultCorners)
 
         let shouldShowText = shouldShowEventText(event: event, date: date, position: position)
         let textColor = getTextColor(for: baseColor)
@@ -630,12 +700,12 @@ class CustomCalendarCell: FSCalendarCell {
         case (true, false):
             return (leading: 2, trailing: 0, maskedCorners: [.layerMinXMinYCorner, .layerMinXMaxYCorner])
         case (false, true):
-            return (leading: 0, trailing: -2, maskedCorners: [.layerMaxXMinYCorner, .layerMaxXMaxYCorner])
+            return (leading: 0, trailing: 2, maskedCorners: [.layerMaxXMinYCorner, .layerMaxXMaxYCorner])
         case (false, false):
             return (leading: 0, trailing: 0, maskedCorners: [])
         case (true, true):
             return (leading: 2,
-                    trailing: -2,
+                    trailing: 2,
                     maskedCorners: [.layerMinXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMinYCorner, .layerMaxXMaxYCorner])
         }
     }
