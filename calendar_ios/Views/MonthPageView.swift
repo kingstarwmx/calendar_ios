@@ -53,6 +53,7 @@ class MonthPageView: UIView {
     private var cancellables = Set<AnyCancellable>()
     private var calendarHeightConstraint: Constraint?
     private var currentSlotLimit: Int
+    private var monthCapacityCache: [String: Int] = [:]
 
     // MARK: - Callbacks
 
@@ -94,7 +95,8 @@ class MonthPageView: UIView {
         addSubview(calendarView)
         addSubview(tableView)
 
-        let initialHeight = calendarHeight(for: calendarView.currentPage)
+        let initialMonth = calendarView.currentPage
+        let initialHeight = calendarHeight(for: initialMonth)
 
         // 布局约束
         calendarView.snp.makeConstraints { make in
@@ -104,7 +106,8 @@ class MonthPageView: UIView {
             calendarHeightConstraint = make.height.equalTo(initialHeight).constraint
         }
 
-        currentSlotLimit = slotLimit(for: initialHeight, month: calendarView.currentPage)
+        currentSlotLimit = slotLimit(for: initialHeight, month: initialMonth)
+        cacheCapacity(for: initialMonth, capacity: currentSlotLimit)
 
         tableView.snp.makeConstraints { make in
             make.top.equalTo(calendarView.snp.bottom)
@@ -139,6 +142,8 @@ class MonthPageView: UIView {
         calendarView.select(viewModel.selectedDate, scrollToDate: false)
         let initialHeight = calendarHeight(for: viewModel.currentMonth)
         calendarHeightConstraint?.update(offset: initialHeight)
+        let capacity = slotLimit(for: calendarView.maxHeight, month: viewModel.currentMonth)
+        cacheCapacity(for: viewModel.currentMonth, capacity: capacity)
         updateSlotLimit(for: initialHeight, month: viewModel.currentMonth)
     }
 
@@ -156,6 +161,9 @@ class MonthPageView: UIView {
                 print("📅 [\(viewModel.monthTitle)] currentMonth changed, setCurrentPage")
                 guard let self = self else { return }
                 self.calendarView.setCurrentPage(month, animated: false)
+                let maxCapacity = self.slotLimit(for: self.calendarView.maxHeight, month: month)
+                self.cacheCapacity(for: month, capacity: maxCapacity)
+
                 let monthHeight = self.calendarHeight(for: month)
                 self.calendarHeightConstraint?.update(offset: monthHeight)
                 self.updateSlotLimit(for: monthHeight, month: month)
@@ -271,10 +279,37 @@ class MonthPageView: UIView {
     }
 
     private func updateSlotLimit(for height: CGFloat, month: Date) {
-        let newLimit = slotLimit(for: height, month: month)
+        let capacity = cachedCapacity(for: month)
+        applyCapacityToVisibleCells(capacity)
+
+        let newLimit = min(capacity, slotLimit(for: height, month: month))
         guard newLimit != currentSlotLimit else { return }
         currentSlotLimit = newLimit
         applySlotLimitToVisibleCells()
+    }
+
+    private func cacheCapacity(for month: Date, capacity: Int) {
+        guard capacity > 0 else { return }
+        monthCapacityCache[monthKey(for: month)] = max(monthCapacityCache[monthKey(for: month)] ?? 0, capacity)
+        applyCapacityToVisibleCells(capacity)
+    }
+
+    private func cachedCapacity(for month: Date) -> Int {
+        monthCapacityCache[monthKey(for: month)] ?? baselineSlotLimit()
+    }
+
+    private func applyCapacityToVisibleCells(_ capacity: Int) {
+        for case let cell as CustomCalendarCell in calendarView.visibleCells() {
+            cell.ensureSlotCapacity(capacity)
+        }
+    }
+
+    private func monthKey(for month: Date) -> String {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month], from: month)
+        let year = components.year ?? 0
+        let monthValue = components.month ?? 0
+        return String(format: "%04d-%02d", year, monthValue)
     }
 
     private func applySlotLimitToVisibleCells() {
@@ -291,23 +326,19 @@ extension MonthPageView: FSCalendarDataSource {
     func calendar(_ calendar: FSCalendar, cellFor date: Date, at position: FSCalendarMonthPosition) -> FSCalendarCell {
         let cell = calendar.dequeueReusableCell(withIdentifier: "CustomCell", for: date, at: position) as! CustomCalendarCell
 
-        // 从 ViewModel 获取事件
         let events = viewModel?.events(for: date) ?? []
-       
-        
-
+        let capacity = cachedCapacity(for: calendar.currentPage)
+        cell.ensureSlotCapacity(capacity)
         cell.updateSlotLimit(currentSlotLimit, refresh: false)
         cell.configure(with: date, events: events)
+        print("date:\(date.formatted())---capacity:\(capacity)")
 
         // 检查是否有连续事件的开始位置，如果有，提升该 cell 的层级
         for event in events {
             if isMultiDayEventStart(event: event, date: date) {
                 // 这个 cell 包含连续事件的开始，提升其层级
                 if date.formatted() == "10/26/2025, 00:00" {
-                    print("date.formatted():\(date.formatted())")
-                }
-                if date.formatted() == "10/27/2025, 00:00" {
-                    print("date.formatted():\(date.formatted())")
+//                    print("date.formatted():\(date.formatted())")
                 }
                 cell.layer.zPosition = 100
                 // 确保 cell 的内容可以超出边界

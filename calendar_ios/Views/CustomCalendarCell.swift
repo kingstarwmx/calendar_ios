@@ -314,6 +314,8 @@ class CustomCalendarCell: FSCalendarCell {
     private var eventSlots: [EventSlotView] = []
     private var maxSlotCapacity: Int = 0
     private var containerHeight: CGFloat = 0
+    private var lastLayoutBounds: CGRect = .zero
+    private var needsSlotRelayout: Bool = false
 
     /// 当前事件列表（用于配置）
     private var currentEvents: [Event] = []
@@ -351,32 +353,25 @@ class CustomCalendarCell: FSCalendarCell {
         contentView.addSubview(customTitleLabel)
         contentView.addSubview(eventsContainerView)
 
-        // 布局由 layoutSubviews 管理，不使用自动布局约束
+        applyStaticFramesIfNeeded(force: true)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
 
-        let metrics = CustomCalendarCell.layoutMetrics
-        let contentBounds = contentView.bounds
+        applyStaticFramesIfNeeded()
 
-        let separatorHeight = metrics.separatorHeight
-        topSeparatorView.frame = CGRect(x: 0, y: 0, width: contentBounds.width, height: separatorHeight)
-
-        let titleY = separatorHeight + metrics.titleTopInset
-        customTitleLabel.frame = CGRect(x: 0, y: titleY, width: contentBounds.width, height: metrics.titleHeight)
-
-        let containerY = titleY + metrics.titleHeight
-        let containerH = resolvedContainerHeight()
-        eventsContainerView.frame = CGRect(x: 0, y: containerY, width: contentBounds.width, height: containerH)
-        print("")
-        layoutEventSlots()
+        if needsSlotRelayout {
+            layoutEventSlots()
+            needsSlotRelayout = false
+        }
 
         // 查找并提升所有标记为999的label的层级
         eventSlots.forEach { $0.elevateExtendedLabel() }
 
         // 更新 shapeLayer 的路径
         let cornerRadius: CGFloat = 8
+        let contentBounds = contentView.bounds
         let insetBounds = contentBounds.insetBy(dx: 1, dy: 1)
         let path = UIBezierPath(roundedRect: insetBounds, cornerRadius: cornerRadius)
 
@@ -446,8 +441,20 @@ class CustomCalendarCell: FSCalendarCell {
         guard normalized != maxVisibleSlots else { return }
         maxVisibleSlots = normalized
         updateContainerHeightCapacity(maxVisibleSlots)
+        needsSlotRelayout = true
         if refresh {
             configureEvents(events: currentEvents, date: currentDate)
+        }
+    }
+
+    /// 确保槽位容量至少达到capacity
+    func ensureSlotCapacity(_ capacity: Int) {
+        guard capacity > 0 else { return }
+        if capacity > maxSlotCapacity {
+            prepareSlots(capacity: capacity)
+            updateContainerHeightCapacity(capacity)
+            needsSlotRelayout = true
+            setNeedsLayout()
         }
     }
 
@@ -524,7 +531,7 @@ class CustomCalendarCell: FSCalendarCell {
             }
         }
 
-        eventsContainerView.setNeedsLayout()
+        needsSlotRelayout = true
         setNeedsLayout()
     }
 
@@ -569,30 +576,31 @@ class CustomCalendarCell: FSCalendarCell {
     }
 
     private func layoutEventSlots() {
-        let metrics = CustomCalendarCell.layoutMetrics
-        let width = eventsContainerView.bounds.width
-        guard width > 0 else { return }
+        UIView.performWithoutAnimation {
+            let metrics = CustomCalendarCell.layoutMetrics
+            let width = eventsContainerView.bounds.width
+            guard width > 0 else { return }
 
-        var currentY: CGFloat = 0
-        var placedAny = false
+            var currentY: CGFloat = 0
 
-        for slot in eventSlots {
-            if slot.isActive {
-                if placedAny {
-                    currentY += metrics.eventSlotSpacing
-                }
-                slot.isHidden = false
+            for slot in eventSlots {
                 let height = slot.intrinsicHeight
+                if slot.isActive {
+                    slot.isHidden = false
+                } else {
+                    slot.isHidden = true
+                    
+                }
+                
+                currentY += metrics.eventSlotSpacing
                 slot.frame = CGRect(x: 0, y: currentY, width: width, height: height)
                 currentY += height
-                placedAny = true
-            } else {
-                slot.isHidden = true
-                slot.frame = CGRect(x: 0, y: currentY, width: width, height: 0)
+                
+                slot.setNeedsLayout()
+                slot.layoutIfNeeded()
             }
-            slot.setNeedsLayout()
-            slot.layoutIfNeeded()
         }
+        
     }
 
     private func updateContainerHeightCapacity(_ capacity: Int) {
@@ -602,6 +610,7 @@ class CustomCalendarCell: FSCalendarCell {
         let metrics = CustomCalendarCell.layoutMetrics
         if maxSlotCapacity == 0 {
             containerHeight = 0
+            needsSlotRelayout = true
             setNeedsLayout()
             return
         }
@@ -610,7 +619,8 @@ class CustomCalendarCell: FSCalendarCell {
             CGFloat(max(maxSlotCapacity - 1, 0)) * metrics.eventSlotSpacing +
             metrics.eventSlotSpacing
         containerHeight = totalHeight
-        eventsContainerView.setNeedsLayout()
+        applyStaticFramesIfNeeded(force: true)
+        needsSlotRelayout = true
         setNeedsLayout()
     }
 
@@ -626,6 +636,26 @@ class CustomCalendarCell: FSCalendarCell {
         return CGFloat(baselineCapacity) * metrics.eventSlotHeight +
             CGFloat(max(baselineCapacity - 1, 0)) * metrics.eventSlotSpacing +
             metrics.eventSlotSpacing
+    }
+
+    private func applyStaticFramesIfNeeded(force: Bool = false) {
+        let bounds = contentView.bounds
+        guard force || bounds != lastLayoutBounds else { return }
+        lastLayoutBounds = bounds
+
+        let metrics = CustomCalendarCell.layoutMetrics
+        let separatorHeight = metrics.separatorHeight
+
+        topSeparatorView.frame = CGRect(x: 0, y: 0, width: bounds.width, height: separatorHeight)
+
+        let titleY = separatorHeight + metrics.titleTopInset
+        customTitleLabel.frame = CGRect(x: 0, y: titleY, width: bounds.width, height: metrics.titleHeight)
+
+        let containerY = titleY + metrics.titleHeight
+        let containerH = resolvedContainerHeight()
+        eventsContainerView.frame = CGRect(x: 0, y: containerY, width: bounds.width, height: containerH)
+
+        needsSlotRelayout = true
     }
 
     private func makeEventConfiguration(for event: Event,
