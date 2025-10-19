@@ -51,6 +51,7 @@ class MonthPageView: UIView {
     /// ViewModel
     var viewModel: MonthPageViewModel?
     private var cancellables = Set<AnyCancellable>()
+    private var suppressScopeCallback = false
     private var calendarHeightConstraint: Constraint?
     private var currentSlotLimit: Int
     private var monthCapacityCache: [String: Int] = [:]
@@ -64,7 +65,7 @@ class MonthPageView: UIView {
     var onEventSelected: ((Event) -> Void)?
 
     /// 日历范围变化回调
-    var onCalendarScopeChanged: ((FSCalendarScope) -> Void)?
+    var onCalendarScopeChanged: ((MonthPageView, FSCalendarScope) -> Void)?
 
     /// 日历高度变化回调
     var onCalendarHeightChanged: ((CGFloat) -> Void)?
@@ -214,6 +215,16 @@ class MonthPageView: UIView {
         tableView.reloadData()
     }
 
+    /// 外部同步 scope
+    func applyScope(_ scope: FSCalendarScope, animated: Bool) {
+        if calendarView.scope != scope {
+            suppressScopeCallback = true
+            calendarView.setScope(scope, animated: animated)
+            suppressScopeCallback = false
+        }
+        adjustHeightAndSlots(for: scope)
+    }
+
     /// 更新日历高度
     func updateCalendarHeight(_ height: CGFloat) {
         calendarHeightConstraint?.update(offset: height)
@@ -312,6 +323,31 @@ class MonthPageView: UIView {
         return String(format: "%04d-%02d", year, monthValue)
     }
 
+    private func adjustHeightAndSlots(for scope: FSCalendarScope) {
+        let currentMonth = calendarView.currentPage
+        let targetHeight: CGFloat
+
+        switch scope {
+        case .maxHeight:
+            targetHeight = calendarView.maxHeight
+            let capacity = slotLimit(for: targetHeight, month: currentMonth)
+            cacheCapacity(for: currentMonth, capacity: capacity)
+            updateSlotLimit(for: targetHeight, month: currentMonth)
+        case .week:
+            targetHeight = calendarHeight(for: currentMonth) / CGFloat(max(rowCount(for: currentMonth), 1))
+            updateSlotLimit(for: targetHeight, month: currentMonth)
+        case .month:
+            fallthrough
+        default:
+            targetHeight = calendarHeight(for: currentMonth)
+            updateSlotLimit(for: targetHeight, month: currentMonth)
+        }
+
+        calendarHeightConstraint?.update(offset: targetHeight)
+        layoutIfNeeded()
+        onCalendarHeightChanged?(targetHeight)
+    }
+
     private func applySlotLimitToVisibleCells() {
         for case let cell as CustomCalendarCell in calendarView.visibleCells() {
             cell.updateSlotLimit(currentSlotLimit)
@@ -399,7 +435,10 @@ extension MonthPageView: FSCalendarDelegate {
         }
 
         // 通知外部
-        onCalendarScopeChanged?(calendar.scope)
+        if suppressScopeCallback {
+            return
+        }
+        onCalendarScopeChanged?(self, calendar.scope)
     }
 
     func calendar(_ calendar: FSCalendar, shouldSelect date: Date, at monthPosition: FSCalendarMonthPosition) -> Bool {

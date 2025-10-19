@@ -41,6 +41,7 @@ final class CalendarViewController: UIViewController {
 
     /// 记录每个月份用户选中的日期（key: "yyyy-MM", value: 选中的日期）
     private var selectedDatesPerMonth: [String: Date] = [:]
+    private var unifiedCalendarScope: FSCalendarScope = .month
 
     init(viewModel: EventViewModel? = nil) {
         self.viewModel = viewModel ?? EventViewModel()
@@ -166,6 +167,7 @@ final class CalendarViewController: UIViewController {
 
             // 配置 View 和 ViewModel
             pageView.configure(with: viewModel)
+            pageView.applyScope(unifiedCalendarScope, animated: false)
 
             // 设置回调
             pageView.onDateSelected = { [weak self] date in
@@ -176,8 +178,8 @@ final class CalendarViewController: UIViewController {
                 self?.handleEventSelection(event)
             }
 
-            pageView.onCalendarScopeChanged = { [weak self] scope in
-                self?.handleCalendarScopeChange(scope)
+            pageView.onCalendarScopeChanged = { [weak self] page, scope in
+                self?.handleCalendarScopeChange(from: page, to: scope)
             }
 
             pageView.onCalendarHeightChanged = { [weak self] height in
@@ -267,6 +269,8 @@ final class CalendarViewController: UIViewController {
                 newViewModel.configure(month: month, events: events)
                 pageView.configure(with: newViewModel)
             }
+
+            pageView.applyScope(unifiedCalendarScope, animated: false)
         }
 
         // 更新月份标签
@@ -306,8 +310,13 @@ final class CalendarViewController: UIViewController {
     }
 
     /// 处理日历范围变化
-    private func handleCalendarScopeChange(_ scope: FSCalendarScope) {
-        // print("📏 日历范围变化: \(scope)")
+    private func handleCalendarScopeChange(from source: MonthPageView, to scope: FSCalendarScope) {
+        guard unifiedCalendarScope != scope else { return }
+        unifiedCalendarScope = scope
+
+        for page in monthPageViews where page !== source {
+            page.applyScope(scope, animated: false)
+        }
     }
 
     /// 处理日历高度变化
@@ -743,6 +752,7 @@ extension CalendarViewController: UIScrollViewDelegate {
             let newMonth = calendar.date(byAdding: .month, value: currentMonthOffset - 2, to: today)!
             let newViewModel = MonthPageViewModel(month: newMonth, selectedDate: getSelectedDateForMonth(newMonth))
             rightView.configure(with: newViewModel)
+            rightView.applyScope(unifiedCalendarScope, animated: false)
 
             // 更新回调
             rightView.onDateSelected = { [weak self] date in
@@ -751,8 +761,8 @@ extension CalendarViewController: UIScrollViewDelegate {
             rightView.onEventSelected = { [weak self] event in
                 self?.handleEventSelection(event)
             }
-            rightView.onCalendarScopeChanged = { [weak self] scope in
-                self?.handleCalendarScopeChange(scope)
+            rightView.onCalendarScopeChanged = { [weak self] page, scope in
+                self?.handleCalendarScopeChange(from: page, to: scope)
             }
             rightView.onCalendarHeightChanged = { [weak self] height in
                 self?.handleCalendarHeightChange(height)
@@ -766,6 +776,7 @@ extension CalendarViewController: UIScrollViewDelegate {
             let newMonth = calendar.date(byAdding: .month, value: currentMonthOffset + 2, to: today)!
             let newViewModel = MonthPageViewModel(month: newMonth, selectedDate: getSelectedDateForMonth(newMonth))
             leftView.configure(with: newViewModel)
+            leftView.applyScope(unifiedCalendarScope, animated: false)
 
             // 更新回调
             leftView.onDateSelected = { [weak self] date in
@@ -774,8 +785,8 @@ extension CalendarViewController: UIScrollViewDelegate {
             leftView.onEventSelected = { [weak self] event in
                 self?.handleEventSelection(event)
             }
-            leftView.onCalendarScopeChanged = { [weak self] scope in
-                self?.handleCalendarScopeChange(scope)
+            leftView.onCalendarScopeChanged = { [weak self] page, scope in
+                self?.handleCalendarScopeChange(from: page, to: scope)
             }
             leftView.onCalendarHeightChanged = { [weak self] height in
                 self?.handleCalendarHeightChange(height)
