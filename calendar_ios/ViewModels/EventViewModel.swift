@@ -90,7 +90,7 @@ final class EventViewModel: ObservableObject {
                     calendars = await self.calendarService.availableDeviceCalendars()
 
                     // 调试：打印所有日历信息
-                    await self.calendarService.printAllCalendars()
+//                    await self.calendarService.printAllCalendars()
                 }
 
                 semaphore.signal()

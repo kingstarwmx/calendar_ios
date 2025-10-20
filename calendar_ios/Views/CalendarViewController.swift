@@ -82,7 +82,6 @@ final class CalendarViewController: UIViewController {
     }
 
     private func loadInitialData() {
-        // print("🔐 请求设备日历访问权限...")
 
         // 计算五个月的日期范围（前两个月到后两个月）
         let calendar = Calendar.current
@@ -570,11 +569,6 @@ final class CalendarViewController: UIViewController {
                 await MainActor.run {
                     self.present(alert, animated: true)
                 }
-
-                // 同时打印到Console
-                print("📅 ==================== 10月9号原始EKEvent数据 ====================")
-                print(message)
-                print("📅 ================================================================")
             } catch {
                 await MainActor.run {
                     self.showAlert(title: "错误", message: "获取事件失败: \(error.localizedDescription)")
@@ -722,12 +716,10 @@ extension CalendarViewController: UIScrollViewDelegate {
 
         if offsetX <= 0 {
             // 滑到最左边，查看前一个月
-            // print("📅 切换到前一个月")
             currentMonthOffset -= 1
             resetScrollViewPosition(direction: .left)
         } else if offsetX >= screenWidth * 2 {
             // 滑到最右边，查看后一个月
-            // print("📅 切换到后一个月")
             currentMonthOffset += 1
             resetScrollViewPosition(direction: .right)
         }

@@ -59,13 +59,6 @@ final class MonthPageViewModel: ObservableObject {
             }
         }
 
-        // 调试日志
-        if !filteredEvents.isEmpty {
-            print("🔎 [\(monthTitle)] Found \(filteredEvents.count) events for \(date.formatted())")
-            for event in filteredEvents {
-                print("    - \(event.title): \(event.startDate.formatted()) - \(event.endDate.formatted())")
-            }
-        }
 
         // 先按时间排序
         var sortedEvents = filteredEvents.sorted { lhs, rhs in
@@ -220,7 +213,6 @@ final class MonthPageViewModel: ObservableObject {
             .map { [weak self] date, _ in
                 guard let self = self else { return [] }
                 let result = self.events(for: date)
-                print("📊 [\(self.monthTitle)] Combine: selectedDate=\(date.formatted()), monthEvents.count=\(self.monthEvents.count), result=\(result.count)")
                 return result
             }
             .assign(to: &$selectedDateEvents)
@@ -282,11 +274,9 @@ final class MonthPageViewModel: ObservableObject {
     /// 选择日期
     func selectDate(_ date: Date) {
         let newDate = calendar.startOfDay(for: date)
-        print("🔍 [\(monthTitle)] selectDate called: \(newDate.formatted()), current events count: \(monthEvents.count)")
         self.selectedDate = newDate
         // 手动触发一次事件更新，以便调试
         let eventsForDate = events(for: newDate)
-        print("🔍 [\(monthTitle)] Events for \(newDate.formatted()): \(eventsForDate.count) events")
     }
 
     /// 检查日期是否在当前月

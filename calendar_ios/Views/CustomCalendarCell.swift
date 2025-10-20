@@ -316,6 +316,7 @@ class CustomCalendarCell: FSCalendarCell {
     private var containerHeight: CGFloat = 0
     private var lastLayoutBounds: CGRect = .zero
     private var needsSlotRelayout: Bool = false
+    private var isElevatedForExtendedEvent: Bool = false
 
     /// 当前事件列表（用于配置）
     private var currentEvents: [Event] = []
@@ -424,6 +425,7 @@ class CustomCalendarCell: FSCalendarCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         resetSlots()
+        updateCellElevation(false)
     }
 
     /// 配置单元格数据
@@ -461,11 +463,12 @@ class CustomCalendarCell: FSCalendarCell {
     /// 配置事件显示
     private func configureEvents(events: [Event], date: Date) {
         resetSlots()
+        updateCellElevation(false)
 
         guard !events.isEmpty else { return }
         
         if currentDate.formatted() == "10/6/2025, 00:00" {
-            print("date.formatted():\(date.formatted())")
+//            print("date.formatted():\(date.formatted())")
         }
 
         // 为每个事件添加位置信息
@@ -480,6 +483,7 @@ class CustomCalendarCell: FSCalendarCell {
         guard slotLimit > 0 else { return }
 
         var displayItems: [EventDisplayItem] = []
+        var needsElevation = false
 
         if totalCount <= slotLimit {
             for item in eventsWithPosition {
@@ -519,7 +523,10 @@ class CustomCalendarCell: FSCalendarCell {
             let slot = eventSlots[index]
             switch item {
             case let .event(event, position):
-                configure(slot: slot, with: event, position: position, on: date)
+                let elevated = configure(slot: slot, with: event, position: position, on: date)
+                if elevated {
+                    needsElevation = true
+                }
             case let .overflow(count):
                 slot.configureOverflow(count: count)
             }
@@ -530,6 +537,8 @@ class CustomCalendarCell: FSCalendarCell {
                 eventSlots[index].reset()
             }
         }
+
+        updateCellElevation(needsElevation)
 
         needsSlotRelayout = true
         setNeedsLayout()
@@ -558,10 +567,11 @@ class CustomCalendarCell: FSCalendarCell {
     }
 
     /// 配置单个槽位
-    private func configure(slot: EventSlotView, with event: Event, position: EventPosition, on date: Date) {
+    @discardableResult
+    private func configure(slot: EventSlotView, with event: Event, position: EventPosition, on date: Date) -> Bool {
         if event.isBlank {
             slot.configureBlank()
-            return
+            return false
         }
 
         let originalColor = event.customColor ?? .systemBlue
@@ -573,6 +583,18 @@ class CustomCalendarCell: FSCalendarCell {
                                                     baseColor: baseColor)
 
         slot.configureEvent(with: configuration)
+        if case .extendLeading = configuration.labelMode {
+            return true
+        }
+        return false
+    }
+
+    private func updateCellElevation(_ shouldElevate: Bool) {
+        guard shouldElevate != isElevatedForExtendedEvent else { return }
+        isElevatedForExtendedEvent = shouldElevate
+        let targetZ: CGFloat = shouldElevate ? 50 : 0
+        contentView.layer.zPosition = targetZ
+        layer.zPosition = targetZ
     }
 
     private func layoutEventSlots() {
@@ -863,18 +885,15 @@ class CustomCalendarCell: FSCalendarCell {
 
             // 调试国庆节事件
             if event.title.contains("国庆") {
-                print("🎌 国庆节事件位置判断(全天):")
-                print("   事件: \(event.title)")
-                print("   当前日期: \(currentComponents.year!)-\(currentComponents.month!)-\(currentComponents.day!)")
-                print("   事件开始: \(startComponents.year!)-\(startComponents.month!)-\(startComponents.day!)")
-                print("   事件结束: \(endComponents.year!)-\(endComponents.month!)-\(endComponents.day!)")
+//                print("🎌 国庆节事件位置判断(全天):")
+//                print("   事件: \(event.title)")
+//                print("   当前日期: \(currentComponents.year!)-\(currentComponents.month!)-\(currentComponents.day!)")
+//                print("   事件开始: \(startComponents.year!)-\(startComponents.month!)-\(startComponents.day!)")
+//                print("   事件结束: \(endComponents.year!)-\(endComponents.month!)-\(endComponents.day!)")
             }
 
             // 检查是否为单天事件
             if eventStart == eventEnd {
-                if event.title.contains("国庆") {
-                    print("   判定为单天全天事件")
-                }
                 return EventPosition(isStart: true, isMiddle: false, isEnd: true)
             }
 
@@ -882,11 +901,6 @@ class CustomCalendarCell: FSCalendarCell {
             let isStart = currentDate == eventStart
             let isEnd = currentDate == eventEnd
             let isMiddle = currentDate > eventStart && currentDate < eventEnd
-
-            if event.title.contains("国庆") {
-                print("   位置: isStart=\(isStart), isMiddle=\(isMiddle), isEnd=\(isEnd)")
-            }
-
             return EventPosition(isStart: isStart, isMiddle: isMiddle, isEnd: isEnd)
         } else {
             // 非全天事件，使用原有逻辑

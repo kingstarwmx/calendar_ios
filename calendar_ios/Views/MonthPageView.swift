@@ -159,7 +159,6 @@ class MonthPageView: UIView {
             .receive(on: DispatchQueue.main)
             .dropFirst() // 跳过初始值
             .sink { [weak self] month in
-                print("📅 [\(viewModel.monthTitle)] currentMonth changed, setCurrentPage")
                 guard let self = self else { return }
                 self.calendarView.setCurrentPage(month, animated: false)
                 let maxCapacity = self.slotLimit(for: self.calendarView.maxHeight, month: month)
@@ -176,7 +175,6 @@ class MonthPageView: UIView {
             .receive(on: DispatchQueue.main)
             .dropFirst() // 跳过初始值
             .sink { [weak self] date in
-                print("📅 [\(viewModel.monthTitle)] selectedDate changed to \(date.formatted()), select and reload tableView")
                 self?.calendarView.select(date, scrollToDate: false)
                 self?.tableView.reloadData()
             }
@@ -191,7 +189,6 @@ class MonthPageView: UIView {
                 return Set(oldEvents.map { $0.id }) == Set(newEvents.map { $0.id })
             }
             .sink { [weak self] events in
-                print("📅 [\(viewModel.monthTitle)] monthEvents changed (count: \(events.count)), reloadData")
                 self?.calendarView.reloadData()
             }
             .store(in: &cancellables)
@@ -204,13 +201,11 @@ class MonthPageView: UIView {
                 return Set(oldEvents.map { $0.id }) == Set(newEvents.map { $0.id })
             }
             .sink { [weak self] events in
-                print("📅 [\(viewModel.monthTitle)] selectedDateEvents changed (count: \(events.count)), reload tableView")
                 self?.tableView.reloadData()
             }
             .store(in: &cancellables)
 
         // 初始渲染一次（让用户看到界面）
-        print("📅 [\(viewModel.monthTitle)] Initial render")
         calendarView.reloadData()
         tableView.reloadData()
     }
@@ -377,7 +372,6 @@ extension MonthPageView: FSCalendarDataSource {
         cell.ensureSlotCapacity(capacity)
         cell.updateSlotLimit(currentSlotLimit, refresh: false)
         cell.configure(with: date, events: events)
-        print("date:\(date.formatted())---capacity:\(capacity)")
 
         // 检查是否有连续事件的开始位置，如果有，提升该 cell 的层级
         for event in events {
@@ -394,7 +388,6 @@ extension MonthPageView: FSCalendarDataSource {
             }
         }
 
-//         print("日期:\(date.formatted()),事件数:\(events.count)")
         return cell
     }
 
@@ -485,7 +478,6 @@ extension MonthPageView: UITableViewDataSource {
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         let count = viewModel?.selectedDateEvents.count ?? 0
-        print("📱 [\(viewModel?.monthTitle ?? "?")] TableView numberOfRows: \(count), selectedDate: \(viewModel?.selectedDate.formatted() ?? "?")")
         return count
     }
 
