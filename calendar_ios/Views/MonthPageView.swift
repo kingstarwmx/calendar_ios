@@ -290,12 +290,22 @@ class MonthPageView: UIView {
     }
 
     private func updateSlotLimit(for height: CGFloat, month: Date) {
+        let scope = calendarView.scope
+
+        let baselineLimit = baselineSlotLimit()
         let capacity = cachedCapacity(for: month)
         applyCapacityToVisibleCells(capacity)
 
-        let newLimit = min(capacity, slotLimit(for: height, month: month))
-        guard newLimit != currentSlotLimit else { return }
-        currentSlotLimit = newLimit
+        let targetLimit: Int
+        switch scope {
+        case .maxHeight:
+            targetLimit = min(capacity, slotLimit(for: height, month: month))
+        default:
+            targetLimit = min(capacity, baselineLimit)
+        }
+
+        guard targetLimit != currentSlotLimit else { return }
+        currentSlotLimit = targetLimit
         applySlotLimitToVisibleCells()
     }
 
@@ -428,11 +438,11 @@ extension MonthPageView: FSCalendarDelegate {
     func calendar(_ calendar: FSCalendar, boundingRectWillChange bounds: CGRect, animated: Bool) {
         updateCalendarHeight(bounds.height)
 
-        if animated {
-            UIView.animate(withDuration: 0.3) {
-                self.layoutIfNeeded()
-            }
-        }
+//        if animated {
+//            UIView.animate(withDuration: 0.3) {
+//                self.layoutIfNeeded()
+//            }
+//        }
 
         // 通知外部
         if suppressScopeCallback {
