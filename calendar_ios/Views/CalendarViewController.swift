@@ -22,9 +22,10 @@ final class CalendarViewController: UIViewController {
     /// 三个月份页面视图（复用）
     private var monthPageViews: [MonthPageView] = []
 
-    /// 当前显示的月份索引（相对于今天）
-    private var currentMonthOffset: Int = 0
-    private var currentWeekOffset: Int = 0
+    /// 当前月视图中心页对应的月份（取月初）
+    private var currentMonthAnchor: Date = Date()
+    /// 当前周视图中心页对应的周起始日
+    private var currentWeekAnchor: Date = Date()
 
     /// 月份标签
     private let monthLabel = UILabel()
@@ -151,13 +152,13 @@ final class CalendarViewController: UIViewController {
     private func setupMonthPages() {
         let screenWidth = DeviceHelper.screenWidth
         let calendar = Calendar.current
-        let today = Date()
+        let selected = viewModel.selectedDate
+        currentMonthAnchor = selected.startOfMonth
+        currentWeekAnchor = startOfWeek(for: selected)
 
         // 创建三个 MonthPageView 和对应的 ViewModel
         for i in 0..<3 {
-            // 计算月份（-1, 0, +1）
-            let monthOffset = currentMonthOffset + i - 1
-            let month = calendar.date(byAdding: .month, value: monthOffset, to: today)!
+            let month = calendar.date(byAdding: .month, value: i - 1, to: currentMonthAnchor)!
 
             // 创建 ViewModel（先不设置事件，等数据加载完成后再设置）
             let viewModel = MonthPageViewModel(month: month, selectedDate: getSelectedDateForMonth(month))
@@ -218,33 +219,97 @@ final class CalendarViewController: UIViewController {
         pageView.tableView.panGestureRecognizer.require(toFail: panGesture)
     }
     private func updateWeekPagesData() {
-        let calendar = Calendar.current
-        let today = Date()
+        guard monthPageViews.count == 3 else { return }
 
-        // 计算三个月份：前一个月、当前月、后一个月
-        var weeks = [
-            calendar.date(byAdding: .weekday, value: currentWeekOffset - 1, to: today)!,
-            calendar.date(byAdding: .month, value: currentWeekOffset, to: today)!,
-            calendar.date(byAdding: .month, value: currentWeekOffset + 1, to: today)!
+        let calendar = Calendar.current
+
+        // 以当前选中日期定位中心周的起始日
+        let anchorDate = viewModel.selectedDate
+        let anchorWeekStart = startOfWeek(for: anchorDate)
+        currentWeekAnchor = anchorWeekStart
+        currentMonthAnchor = anchorWeekStart.startOfMonth
+
+        // 计算前一周、当前周、后一周的起始日
+        let weekStarts: [Date] = [
+            calendar.date(byAdding: .weekOfYear, value: -1, to: anchorWeekStart) ?? anchorWeekStart,
+            anchorWeekStart,
+            calendar.date(byAdding: .weekOfYear, value: 1, to: anchorWeekStart) ?? anchorWeekStart
         ]
-        
+
+        for (index, pageView) in monthPageViews.enumerated() {
+            guard let weekStart = weekStarts[safe: index] else { continue }
+            let weekStartDay = calendar.startOfDay(for: weekStart)
+            let weekEndDay = calendar.date(byAdding: .day, value: 6, to: weekStartDay) ?? weekStartDay
+            let representativeMonth = monthForWeek(startingAt: weekStartDay)
+
+            let events = viewModel.events.filter { event in
+                let eventStart = calendar.startOfDay(for: event.startDate)
+                let eventEnd = calendar.startOfDay(for: event.endDate)
+                return eventEnd >= weekStartDay && eventStart <= weekEndDay
+            }
+
+            if let existingViewModel = pageView.viewModel {
+                existingViewModel.configure(month: representativeMonth, events: events)
+                if !calendar.isDate(existingViewModel.selectedDate, inSameDayAs: weekStartDay) {
+                    existingViewModel.selectDate(weekStartDay)
+                }
+            } else {
+                let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: weekStartDay)
+                newViewModel.configure(month: representativeMonth, events: events)
+                pageView.configure(with: newViewModel)
+            }
+
+            pageView.applyScope(.week, animated: false)
+
+            if !calendar.isDate(pageView.calendarView.currentPage, inSameDayAs: weekStartDay) {
+                pageView.calendarView.setCurrentPage(weekStartDay, animated: false)
+            }
+
+            if let currentSelected = pageView.calendarView.selectedDate {
+                if !calendar.isDate(currentSelected, inSameDayAs: weekStartDay) {
+                    pageView.calendarView.select(weekStartDay, scrollToDate: false)
+                }
+            } else {
+                pageView.calendarView.select(weekStartDay, scrollToDate: false)
+            }
+        }
+
+        updateMonthLabel(for: anchorWeekStart)
+        if !calendar.isDate(viewModel.selectedDate, inSameDayAs: anchorWeekStart) {
+            viewModel.selectedDate = anchorWeekStart
+        }
+    }
+
+    private func startOfWeek(for date: Date) -> Date {
+        let calendar = Calendar.current
+        let normalized = calendar.startOfDay(for: date)
+        let weekday = calendar.component(.weekday, from: normalized)
+        let firstWeekday = calendar.firstWeekday
+        var diff = weekday - firstWeekday
+        if diff < 0 { diff += 7 }
+        return calendar.date(byAdding: .day, value: -diff, to: normalized) ?? normalized
+    }
+
+    private func monthForWeek(startingAt weekStart: Date) -> Date {
+        // 使用周起始日所在月份
+        return weekStart.startOfMonth
     }
 
     /// 更新三个月份页面的数据
     private func updateMonthPagesData() {
         let calendar = Calendar.current
-        let today = Date()
+        let centerMonth = currentMonthAnchor.startOfMonth
 
         // 计算三个月份：前一个月、当前月、后一个月
         let months = [
-            calendar.date(byAdding: .month, value: currentMonthOffset - 1, to: today)!,
-            calendar.date(byAdding: .month, value: currentMonthOffset, to: today)!,
-            calendar.date(byAdding: .month, value: currentMonthOffset + 1, to: today)!
+            calendar.date(byAdding: .month, value: -1, to: centerMonth)!,
+            centerMonth,
+            calendar.date(byAdding: .month, value: 1, to: centerMonth)!
         ]
 
         // 为每个页面更新 ViewModel
         for (index, pageView) in monthPageViews.enumerated() {
-            let month = months[index]
+            let month = months[index].startOfMonth
 
             // 获取该月份视图实际显示的日期范围（包括前后月的占位日期）
             let firstDayOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: month))!
@@ -286,7 +351,7 @@ final class CalendarViewController: UIViewController {
         }
 
         // 更新月份标签
-        let currentMonth = months[1]
+        let currentMonth = centerMonth
         updateMonthLabel(for: currentMonth)
 
         // 获取当前月应该选中的日期
@@ -302,13 +367,25 @@ final class CalendarViewController: UIViewController {
 
     /// 处理日期选择
     private func handleDateSelection(_ date: Date) {
-        // print("📆 选中日期: \(date)")
+        let calendar = Calendar.current
+        let normalizedDate = calendar.startOfDay(for: date)
 
-        // 保存用户选中的日期
-        saveSelectedDate(date)
+        if unifiedCalendarScope == .week {
+            let weekStart = startOfWeek(for: normalizedDate)
+            currentWeekAnchor = weekStart
+            currentMonthAnchor = weekStart.startOfMonth
+            saveSelectedDate(weekStart)
 
-        // 更新 viewModel 的选中日期（用于工具栏）
-        viewModel.selectedDate = date
+            updateMonthLabel(for: weekStart)
+            viewModel.selectedDate = weekStart
+        } else {
+            let month = normalizedDate.startOfMonth
+            currentMonthAnchor = month
+            currentWeekAnchor = startOfWeek(for: normalizedDate)
+            saveSelectedDate(normalizedDate)
+            updateMonthLabel(for: normalizedDate)
+            viewModel.selectedDate = normalizedDate
+        }
     }
 
     /// 处理事件选择
@@ -324,18 +401,24 @@ final class CalendarViewController: UIViewController {
     /// 处理日历范围变化
     private func handleCalendarScopeChange(from source: MonthPageView, to scope: FSCalendarScope) {
         guard unifiedCalendarScope != scope else { return }
-        let sourceScope = unifiedCalendarScope
         unifiedCalendarScope = scope
+
+        switch scope {
+        case .week:
+            let anchor = startOfWeek(for: viewModel.selectedDate)
+            currentWeekAnchor = anchor
+            currentMonthAnchor = anchor.startOfMonth
+            viewModel.selectedDate = anchor
+            updateWeekPagesData()
+        case .month, .maxHeight:
+            currentMonthAnchor = viewModel.selectedDate.startOfMonth
+            updateMonthPagesData()
+        @unknown default:
+            break
+        }
+
         for page in monthPageViews where page !== source {
             page.applyScope(scope, animated: false)
-        }
-        if scope == .week {
-            //切换到week模式处理前后page的数据和选中日期
-            updateWeekPagesData()
-        }
-        if sourceScope == .week {
-            //从week模式恢复到其他模式需要重置
-            updateMonthPagesData()
         }
     }
 
@@ -741,12 +824,8 @@ extension CalendarViewController: UIScrollViewDelegate {
         let offsetX = scrollView.contentOffset.x
 
         if offsetX <= 0 {
-            // 滑到最左边，查看前一个月
-            currentMonthOffset -= 1
             resetScrollViewPosition(direction: .left)
         } else if offsetX >= screenWidth * 2 {
-            // 滑到最右边，查看后一个月
-            currentMonthOffset += 1
             resetScrollViewPosition(direction: .right)
         }
     }
@@ -758,55 +837,16 @@ extension CalendarViewController: UIScrollViewDelegate {
 
         let screenWidth = DeviceHelper.screenWidth
         let calendar = Calendar.current
-        let today = Date()
 
         // 根据方向重新排列页面视图
         if direction == .left {
             // 向左滑动：右边视图移到左边（变成前前一个月）
             let rightView = monthPageViews.removeLast()
             monthPageViews.insert(rightView, at: 0)
-
-            // 为新的左边页面创建新的 ViewModel
-//            let newMonth = calendar.date(byAdding: .month, value: currentMonthOffset - 2, to: today)!
-//            let newViewModel = MonthPageViewModel(month: newMonth, selectedDate: getSelectedDateForMonth(newMonth))
-//            rightView.configure(with: newViewModel)
-//            rightView.applyScope(unifiedCalendarScope, animated: false)
-//
-//            rightView.onDateSelected = { [weak self] date in
-//                self?.handleDateSelection(date)
-//            }
-//            rightView.onEventSelected = { [weak self] event in
-//                self?.handleEventSelection(event)
-//            }
-//            rightView.onCalendarScopeChanged = { [weak self] page, scope in
-//                self?.handleCalendarScopeChange(from: page, to: scope)
-//            }
-//            rightView.onCalendarHeightChanged = { [weak self] height in
-//                self?.handleCalendarHeightChange(height)
-//            }
         } else {
             // 向右滑动：左边视图移到右边（变成后后一个月）
             let leftView = monthPageViews.removeFirst()
             monthPageViews.append(leftView)
-
-            // 为新的右边页面创建新的 ViewModel
-//            let newMonth = calendar.date(byAdding: .month, value: currentMonthOffset + 2, to: today)!
-//            let newViewModel = MonthPageViewModel(month: newMonth, selectedDate: getSelectedDateForMonth(newMonth))
-//            leftView.configure(with: newViewModel)
-//            leftView.applyScope(unifiedCalendarScope, animated: false)
-//
-//            leftView.onDateSelected = { [weak self] date in
-//                self?.handleDateSelection(date)
-//            }
-//            leftView.onEventSelected = { [weak self] event in
-//                self?.handleEventSelection(event)
-//            }
-//            leftView.onCalendarScopeChanged = { [weak self] page, scope in
-//                self?.handleCalendarScopeChange(from: page, to: scope)
-//            }
-//            leftView.onCalendarHeightChanged = { [weak self] height in
-//                self?.handleCalendarHeightChange(height)
-//            }
         }
 
         // 重新布局页面位置
@@ -814,20 +854,29 @@ extension CalendarViewController: UIScrollViewDelegate {
             pageView.frame.origin.x = screenWidth * CGFloat(index)
         }
 
-        // 更新月份数据
+        // 根据当前模式更新数据
         if unifiedCalendarScope == .week {
+            let delta = direction == .left ? -1 : 1
+            currentWeekAnchor = calendar.date(byAdding: .weekOfYear, value: delta, to: currentWeekAnchor) ?? currentWeekAnchor
+            currentMonthAnchor = currentWeekAnchor.startOfMonth
+            saveSelectedDate(currentWeekAnchor)
+            viewModel.selectedDate = currentWeekAnchor
             updateWeekPagesData()
-        }else {
+        } else {
+            let delta = direction == .left ? -1 : 1
+            currentMonthAnchor = calendar.date(byAdding: .month, value: delta, to: currentMonthAnchor) ?? currentMonthAnchor
+            let centerSelectedDate = getSelectedDateForMonth(currentMonthAnchor)
+            viewModel.selectedDate = centerSelectedDate
             updateMonthPagesData()
         }
-        
 
         // 重置 contentOffset 到中间位置（不带动画）
         monthScrollView.setContentOffset(CGPoint(x: screenWidth, y: 0), animated: false)
 
         // 计算五个月的日期范围并加载数据（当前月份的前后各两个月）
-        guard let startMonth = calendar.date(byAdding: .month, value: currentMonthOffset - 2, to: today),
-              let endMonth = calendar.date(byAdding: .month, value: currentMonthOffset + 2, to: today) else {
+        let centerMonth = currentMonthAnchor.startOfMonth
+        guard let startMonth = calendar.date(byAdding: .month, value: -2, to: centerMonth),
+              let endMonth = calendar.date(byAdding: .month, value: 2, to: centerMonth) else {
             isResettingScrollView = false
             return
         }
