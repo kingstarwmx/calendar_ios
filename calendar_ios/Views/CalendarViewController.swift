@@ -24,6 +24,7 @@ final class CalendarViewController: UIViewController {
 
     /// 当前显示的月份索引（相对于今天）
     private var currentMonthOffset: Int = 0
+    private var currentWeekOffset: Int = 0
 
     /// 月份标签
     private let monthLabel = UILabel()
@@ -216,6 +217,18 @@ final class CalendarViewController: UIViewController {
         // tableView 的滑动手势需要等待 scope 手势失败
         pageView.tableView.panGestureRecognizer.require(toFail: panGesture)
     }
+    private func updateWeekPagesData() {
+        let calendar = Calendar.current
+        let today = Date()
+
+        // 计算三个月份：前一个月、当前月、后一个月
+        var weeks = [
+            calendar.date(byAdding: .weekday, value: currentWeekOffset - 1, to: today)!,
+            calendar.date(byAdding: .month, value: currentWeekOffset, to: today)!,
+            calendar.date(byAdding: .month, value: currentWeekOffset + 1, to: today)!
+        ]
+        
+    }
 
     /// 更新三个月份页面的数据
     private func updateMonthPagesData() {
@@ -311,10 +324,18 @@ final class CalendarViewController: UIViewController {
     /// 处理日历范围变化
     private func handleCalendarScopeChange(from source: MonthPageView, to scope: FSCalendarScope) {
         guard unifiedCalendarScope != scope else { return }
+        let sourceScope = unifiedCalendarScope
         unifiedCalendarScope = scope
-
         for page in monthPageViews where page !== source {
             page.applyScope(scope, animated: false)
+        }
+        if scope == .week {
+            //切换到week模式处理前后page的数据和选中日期
+            updateWeekPagesData()
+        }
+        if sourceScope == .week {
+            //从week模式恢复到其他模式需要重置
+            updateMonthPagesData()
         }
     }
 
@@ -370,7 +391,12 @@ final class CalendarViewController: UIViewController {
             .sink { [weak self] _ in
                 guard let self = self else { return }
                 // 刷新所有月份页面的数据
-                self.updateMonthPagesData()
+                if self.unifiedCalendarScope == .week {
+                    self.updateWeekPagesData()
+                }else {
+                    self.updateMonthPagesData()
+                }
+                
                 // print("🔄 日历数据已刷新")
             }
             .store(in: &cancellables)
@@ -741,48 +767,46 @@ extension CalendarViewController: UIScrollViewDelegate {
             monthPageViews.insert(rightView, at: 0)
 
             // 为新的左边页面创建新的 ViewModel
-            let newMonth = calendar.date(byAdding: .month, value: currentMonthOffset - 2, to: today)!
-            let newViewModel = MonthPageViewModel(month: newMonth, selectedDate: getSelectedDateForMonth(newMonth))
-            rightView.configure(with: newViewModel)
-            rightView.applyScope(unifiedCalendarScope, animated: false)
-
-            // 更新回调
-            rightView.onDateSelected = { [weak self] date in
-                self?.handleDateSelection(date)
-            }
-            rightView.onEventSelected = { [weak self] event in
-                self?.handleEventSelection(event)
-            }
-            rightView.onCalendarScopeChanged = { [weak self] page, scope in
-                self?.handleCalendarScopeChange(from: page, to: scope)
-            }
-            rightView.onCalendarHeightChanged = { [weak self] height in
-                self?.handleCalendarHeightChange(height)
-            }
+//            let newMonth = calendar.date(byAdding: .month, value: currentMonthOffset - 2, to: today)!
+//            let newViewModel = MonthPageViewModel(month: newMonth, selectedDate: getSelectedDateForMonth(newMonth))
+//            rightView.configure(with: newViewModel)
+//            rightView.applyScope(unifiedCalendarScope, animated: false)
+//
+//            rightView.onDateSelected = { [weak self] date in
+//                self?.handleDateSelection(date)
+//            }
+//            rightView.onEventSelected = { [weak self] event in
+//                self?.handleEventSelection(event)
+//            }
+//            rightView.onCalendarScopeChanged = { [weak self] page, scope in
+//                self?.handleCalendarScopeChange(from: page, to: scope)
+//            }
+//            rightView.onCalendarHeightChanged = { [weak self] height in
+//                self?.handleCalendarHeightChange(height)
+//            }
         } else {
             // 向右滑动：左边视图移到右边（变成后后一个月）
             let leftView = monthPageViews.removeFirst()
             monthPageViews.append(leftView)
 
             // 为新的右边页面创建新的 ViewModel
-            let newMonth = calendar.date(byAdding: .month, value: currentMonthOffset + 2, to: today)!
-            let newViewModel = MonthPageViewModel(month: newMonth, selectedDate: getSelectedDateForMonth(newMonth))
-            leftView.configure(with: newViewModel)
-            leftView.applyScope(unifiedCalendarScope, animated: false)
-
-            // 更新回调
-            leftView.onDateSelected = { [weak self] date in
-                self?.handleDateSelection(date)
-            }
-            leftView.onEventSelected = { [weak self] event in
-                self?.handleEventSelection(event)
-            }
-            leftView.onCalendarScopeChanged = { [weak self] page, scope in
-                self?.handleCalendarScopeChange(from: page, to: scope)
-            }
-            leftView.onCalendarHeightChanged = { [weak self] height in
-                self?.handleCalendarHeightChange(height)
-            }
+//            let newMonth = calendar.date(byAdding: .month, value: currentMonthOffset + 2, to: today)!
+//            let newViewModel = MonthPageViewModel(month: newMonth, selectedDate: getSelectedDateForMonth(newMonth))
+//            leftView.configure(with: newViewModel)
+//            leftView.applyScope(unifiedCalendarScope, animated: false)
+//
+//            leftView.onDateSelected = { [weak self] date in
+//                self?.handleDateSelection(date)
+//            }
+//            leftView.onEventSelected = { [weak self] event in
+//                self?.handleEventSelection(event)
+//            }
+//            leftView.onCalendarScopeChanged = { [weak self] page, scope in
+//                self?.handleCalendarScopeChange(from: page, to: scope)
+//            }
+//            leftView.onCalendarHeightChanged = { [weak self] height in
+//                self?.handleCalendarHeightChange(height)
+//            }
         }
 
         // 重新布局页面位置
@@ -791,7 +815,12 @@ extension CalendarViewController: UIScrollViewDelegate {
         }
 
         // 更新月份数据
-        updateMonthPagesData()
+        if unifiedCalendarScope == .week {
+            updateWeekPagesData()
+        }else {
+            updateMonthPagesData()
+        }
+        
 
         // 重置 contentOffset 到中间位置（不带动画）
         monthScrollView.setContentOffset(CGPoint(x: screenWidth, y: 0), animated: false)
