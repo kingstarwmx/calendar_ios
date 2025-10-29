@@ -43,6 +43,10 @@ final class CalendarViewController: UIViewController {
 
     /// 记录每个月份用户选中的日期（key: "yyyy-MM", value: 选中的日期）
     private var selectedDatesPerMonth: [String: Date] = [:]
+    /// 记录周模式下已经加载过事件的月份 key（yyyy-MM）
+    private var loadedMonthsForWeekScope: Set<String> = []
+    /// 记录每周用户选中的日期（key: 周起始日"yyyy-MM-dd"，value: 选中的日期）
+    private var selectedDatesPerWeek: [String: Date] = [:]
     private var unifiedCalendarScope: FSCalendarScope = .month
 
     init(viewModel: EventViewModel? = nil) {
@@ -227,7 +231,8 @@ final class CalendarViewController: UIViewController {
         let anchorDate = viewModel.selectedDate
         let anchorWeekStart = startOfWeek(for: anchorDate)
         currentWeekAnchor = anchorWeekStart
-        currentMonthAnchor = anchorWeekStart.startOfMonth
+        currentMonthAnchor = anchorDate.startOfMonth
+        saveSelectedDateForWeek(anchorDate)
 
         // 计算前一周、当前周、后一周的起始日
         let weekStarts: [Date] = [
@@ -240,7 +245,12 @@ final class CalendarViewController: UIViewController {
             guard let weekStart = weekStarts[safe: index] else { continue }
             let weekStartDay = calendar.startOfDay(for: weekStart)
             let weekEndDay = calendar.date(byAdding: .day, value: 6, to: weekStartDay) ?? weekStartDay
-            let representativeMonth = monthForWeek(startingAt: weekStartDay)
+            let representativeMonth: Date
+            if index == 1 {
+                representativeMonth = viewModel.selectedDate.startOfMonth
+            } else {
+                representativeMonth = monthForWeek(startingAt: weekStartDay)
+            }
 
             let events = viewModel.events.filter { event in
                 let eventStart = calendar.startOfDay(for: event.startDate)
@@ -248,36 +258,57 @@ final class CalendarViewController: UIViewController {
                 return eventEnd >= weekStartDay && eventStart <= weekEndDay
             }
 
+            var selectedDateForPage = getSelectedDateForWeek(startingAt: weekStartDay)
+            if selectedDateForPage < weekStartDay || selectedDateForPage > weekEndDay {
+                selectedDateForPage = weekStartDay
+                saveSelectedDateForWeek(selectedDateForPage)
+            }
+            if index == 1 {
+                let normalizedSelected = calendar.startOfDay(for: viewModel.selectedDate)
+                if calendar.isDate(normalizedSelected, equalTo: weekStartDay, toGranularity: .weekOfYear) {
+                    selectedDateForPage = normalizedSelected
+                } else {
+                    selectedDateForPage = weekStartDay
+                }
+                saveSelectedDateForWeek(selectedDateForPage)
+                currentMonthAnchor = representativeMonth
+                if !calendar.isDate(viewModel.selectedDate, inSameDayAs: selectedDateForPage) {
+                    viewModel.selectedDate = selectedDateForPage
+                }
+            }
+
             if let existingViewModel = pageView.viewModel {
                 existingViewModel.configure(month: representativeMonth, events: events)
-                if !calendar.isDate(existingViewModel.selectedDate, inSameDayAs: weekStartDay) {
-                    existingViewModel.selectDate(weekStartDay)
+                print("representativeMonth:\(representativeMonth) selectedDateForPage:\(selectedDateForPage)")
+                if !calendar.isDate(existingViewModel.selectedDate, inSameDayAs: selectedDateForPage) {
+                    existingViewModel.selectDate(selectedDateForPage)
+                    
                 }
             } else {
-                let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: weekStartDay)
+                let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
                 newViewModel.configure(month: representativeMonth, events: events)
                 pageView.configure(with: newViewModel)
             }
 
             pageView.applyScope(.week, animated: false)
 
+            if let currentSelected = pageView.calendarView.selectedDate {
+                if !calendar.isDate(currentSelected, inSameDayAs: selectedDateForPage) {
+                    pageView.calendarView.select(selectedDateForPage, scrollToDate: false)
+                }
+            } else {
+                pageView.calendarView.select(selectedDateForPage, scrollToDate: false)
+            }
+
             if !calendar.isDate(pageView.calendarView.currentPage, inSameDayAs: weekStartDay) {
                 pageView.calendarView.setCurrentPage(weekStartDay, animated: false)
             }
-
-            if let currentSelected = pageView.calendarView.selectedDate {
-                if !calendar.isDate(currentSelected, inSameDayAs: weekStartDay) {
-                    pageView.calendarView.select(weekStartDay, scrollToDate: false)
-                }
-            } else {
-                pageView.calendarView.select(weekStartDay, scrollToDate: false)
-            }
+            pageView.calendarView.reloadData()
+            pageView.calendarView.layoutIfNeeded()
         }
 
-        updateMonthLabel(for: anchorWeekStart)
-        if !calendar.isDate(viewModel.selectedDate, inSameDayAs: anchorWeekStart) {
-            viewModel.selectedDate = anchorWeekStart
-        }
+        updateMonthLabel(for: viewModel.selectedDate)
+        debugLogWeekPages(reason: "updateWeekPagesData", weekStarts: weekStarts)
     }
 
     private func startOfWeek(for date: Date) -> Date {
@@ -293,6 +324,27 @@ final class CalendarViewController: UIViewController {
     private func monthForWeek(startingAt weekStart: Date) -> Date {
         // 使用周起始日所在月份
         return weekStart.startOfMonth
+    }
+
+    private func debugLogWeekPages(reason: String, weekStarts: [Date]) {
+#if DEBUG
+        guard unifiedCalendarScope == .week else { return }
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            for (index, start) in weekStarts.enumerated() {
+                let days = (0..<7).compactMap { offset -> String? in
+                    guard let date = calendar.date(byAdding: .day, value: offset, to: start) else { return nil }
+                    return formatter.string(from: date)
+                }.joined(separator: ",")
+                let selected = formatter.string(from: self.getSelectedDateForWeek(startingAt: start))
+                print("[WeekDebug][\(reason)] index=\(index) days=[\(days)] selected=\(selected)")
+            }
+        }
+#endif
     }
 
     /// 更新三个月份页面的数据
@@ -371,13 +423,13 @@ final class CalendarViewController: UIViewController {
         let normalizedDate = calendar.startOfDay(for: date)
 
         if unifiedCalendarScope == .week {
-            let weekStart = startOfWeek(for: normalizedDate)
-            currentWeekAnchor = weekStart
-            currentMonthAnchor = weekStart.startOfMonth
-            saveSelectedDate(weekStart)
+            currentWeekAnchor = startOfWeek(for: normalizedDate)
+            currentMonthAnchor = normalizedDate.startOfMonth
+            saveSelectedDate(normalizedDate)
+            saveSelectedDateForWeek(normalizedDate)
 
-            updateMonthLabel(for: weekStart)
-            viewModel.selectedDate = weekStart
+            updateMonthLabel(for: normalizedDate)
+            viewModel.selectedDate = normalizedDate
         } else {
             let month = normalizedDate.startOfMonth
             currentMonthAnchor = month
@@ -407,11 +459,14 @@ final class CalendarViewController: UIViewController {
         case .week:
             let anchor = startOfWeek(for: viewModel.selectedDate)
             currentWeekAnchor = anchor
-            currentMonthAnchor = anchor.startOfMonth
-            viewModel.selectedDate = anchor
+            currentMonthAnchor = viewModel.selectedDate.startOfMonth
+            saveSelectedDate(viewModel.selectedDate)
+            saveSelectedDateForWeek(viewModel.selectedDate)
+            loadedMonthsForWeekScope.insert(getMonthKey(for: currentWeekAnchor))
             updateWeekPagesData()
         case .month, .maxHeight:
             currentMonthAnchor = viewModel.selectedDate.startOfMonth
+            loadedMonthsForWeekScope.removeAll()
             updateMonthPagesData()
         @unknown default:
             break
@@ -459,6 +514,19 @@ final class CalendarViewController: UIViewController {
         selectedDatesPerMonth[monthKey] = date
     }
 
+    /// 获取指定周应该选中的日期（默认返回周首日）
+    private func getSelectedDateForWeek(startingAt weekStart: Date) -> Date {
+        let key = getWeekKey(for: weekStart)
+        return selectedDatesPerWeek[key] ?? weekStart
+    }
+
+    /// 保存用户在某周选中的日期
+    private func saveSelectedDateForWeek(_ date: Date) {
+        let weekStart = startOfWeek(for: date)
+        let key = getWeekKey(for: weekStart)
+        selectedDatesPerWeek[key] = date
+    }
+
     /// 获取月份的 key（格式：yyyy-MM）
     /// - Parameter date: 日期
     /// - Returns: 月份 key
@@ -466,6 +534,13 @@ final class CalendarViewController: UIViewController {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM"
         return formatter.string(from: date)
+    }
+
+    /// 获取周的 key（格式：yyyy-MM-dd，对应周起始日）
+    private func getWeekKey(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: startOfWeek(for: date))
     }
 
     private func bindViewModel() {
@@ -859,14 +934,17 @@ extension CalendarViewController: UIScrollViewDelegate {
             let delta = direction == .left ? -1 : 1
             currentWeekAnchor = calendar.date(byAdding: .weekOfYear, value: delta, to: currentWeekAnchor) ?? currentWeekAnchor
             currentMonthAnchor = currentWeekAnchor.startOfMonth
-            saveSelectedDate(currentWeekAnchor)
-            viewModel.selectedDate = currentWeekAnchor
+            let storedSelection = getSelectedDateForWeek(startingAt: currentWeekAnchor)
+            saveSelectedDate(storedSelection)
+            saveSelectedDateForWeek(storedSelection)
+            viewModel.selectedDate = storedSelection
             updateWeekPagesData()
         } else {
             let delta = direction == .left ? -1 : 1
             currentMonthAnchor = calendar.date(byAdding: .month, value: delta, to: currentMonthAnchor) ?? currentMonthAnchor
             let centerSelectedDate = getSelectedDateForMonth(currentMonthAnchor)
             viewModel.selectedDate = centerSelectedDate
+            saveSelectedDate(centerSelectedDate)
             updateMonthPagesData()
         }
 
@@ -874,15 +952,30 @@ extension CalendarViewController: UIScrollViewDelegate {
         monthScrollView.setContentOffset(CGPoint(x: screenWidth, y: 0), animated: false)
 
         // 计算五个月的日期范围并加载数据（当前月份的前后各两个月）
-        let centerMonth = currentMonthAnchor.startOfMonth
-        guard let startMonth = calendar.date(byAdding: .month, value: -2, to: centerMonth),
-              let endMonth = calendar.date(byAdding: .month, value: 2, to: centerMonth) else {
-            isResettingScrollView = false
-            return
-        }
+        if unifiedCalendarScope == .week {
+            let currentMonthKey = getMonthKey(for: currentWeekAnchor)
+            if !loadedMonthsForWeekScope.contains(currentMonthKey) {
+                guard let startMonth = calendar.date(byAdding: .month, value: -2, to: currentWeekAnchor),
+                      let endMonth = calendar.date(byAdding: .month, value: 2, to: currentWeekAnchor) else {
+                    isResettingScrollView = false
+                    return
+                }
 
-        let fiveMonthRange = DateInterval(start: startMonth.startOfMonth, end: endMonth.endOfMonth)
-        viewModel.loadEvents(forceRefresh: true, dateRange: fiveMonthRange)
+                let range = DateInterval(start: startMonth.startOfMonth, end: endMonth.endOfMonth)
+                viewModel.loadEvents(forceRefresh: true, dateRange: range)
+                loadedMonthsForWeekScope.insert(currentMonthKey)
+            }
+        } else {
+            let centerMonth = currentMonthAnchor.startOfMonth
+            guard let startMonth = calendar.date(byAdding: .month, value: -2, to: centerMonth),
+                  let endMonth = calendar.date(byAdding: .month, value: 2, to: centerMonth) else {
+                isResettingScrollView = false
+                return
+            }
+
+            let fiveMonthRange = DateInterval(start: startMonth.startOfMonth, end: endMonth.endOfMonth)
+            viewModel.loadEvents(forceRefresh: true, dateRange: fiveMonthRange)
+        }
 
         isResettingScrollView = false
     }
