@@ -235,7 +235,7 @@ final class MonthPageViewModel: ObservableObject {
     func configure(month: Date, events: [Event]) {
         // 检查月份是否真的改变了
         let monthChanged = !calendar.isDate(self.currentMonth, equalTo: month, toGranularity: .month)
-
+        print("monthChanged:\(monthChanged) month:\(month.formatted())")
         // 只保留实际显示范围内的事件
         let range: ClosedRange<Date>
         if monthChanged {

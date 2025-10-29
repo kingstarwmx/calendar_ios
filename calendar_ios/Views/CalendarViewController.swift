@@ -222,7 +222,7 @@ final class CalendarViewController: UIViewController {
         // tableView 的滑动手势需要等待 scope 手势失败
         pageView.tableView.panGestureRecognizer.require(toFail: panGesture)
     }
-    private func updateWeekPagesData() {
+    private func updateWeekPagesData(_ direction: Direction) {
         guard monthPageViews.count == 3 else { return }
 
         let calendar = Calendar.current
@@ -241,7 +241,8 @@ final class CalendarViewController: UIViewController {
             calendar.date(byAdding: .weekOfYear, value: 1, to: anchorWeekStart) ?? anchorWeekStart
         ]
 
-        for (index, pageView) in monthPageViews.enumerated() {
+        for index in monthPageViews.indices {
+            var pageView = monthPageViews[index]
             guard let weekStart = weekStarts[safe: index] else { continue }
             let weekStartDay = calendar.startOfDay(for: weekStart)
             let weekEndDay = calendar.date(byAdding: .day, value: 6, to: weekStartDay) ?? weekStartDay
@@ -277,18 +278,49 @@ final class CalendarViewController: UIViewController {
                 }
             }
 
-            if let existingViewModel = pageView.viewModel {
-                existingViewModel.configure(month: representativeMonth, events: events)
-                print("representativeMonth:\(representativeMonth) selectedDateForPage:\(selectedDateForPage)")
-                if !calendar.isDate(existingViewModel.selectedDate, inSameDayAs: selectedDateForPage) {
-                    existingViewModel.selectDate(selectedDateForPage)
-                    
+            if direction == .up {
+                if index == 1 {
+                    let existingViewModel = pageView.viewModel!
+                    existingViewModel.configure(month: representativeMonth, events: events)
+                }else {
+                    pageView = MonthPageView()
+                    let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
+                    pageView.configure(with: newViewModel)
+                    newViewModel.configure(month: representativeMonth, events: events)
+                    newViewModel.selectDate(selectedDateForPage)
                 }
-            } else {
-                let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
-                newViewModel.configure(month: representativeMonth, events: events)
-                pageView.configure(with: newViewModel)
+            } else if direction == .right {
+                if index == 2 {
+                    let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
+                    newViewModel.configure(month: representativeMonth, events: events)
+                    pageView.configure(with: newViewModel)
+                    newViewModel.selectDate(selectedDateForPage)
+                }
+            } else if direction == .left {
+                if index == 0 {
+                    let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
+                    newViewModel.configure(month: representativeMonth, events: events)
+                    pageView.configure(with: newViewModel)
+                    newViewModel.selectDate(selectedDateForPage)
+                }
             }
+            
+            
+            
+//            if let existingViewModel = pageView.viewModel  {
+//                existingViewModel.configure(month: representativeMonth, events: events)
+//                print("representativeMonth:\(representativeMonth.formatted()) selectedDateForPage:\(selectedDateForPage.formatted())")
+//                if !calendar.isDate(existingViewModel.selectedDate, inSameDayAs: selectedDateForPage) {
+//                    existingViewModel.selectDate(selectedDateForPage)
+//                    
+//                }
+//            } else {
+//                let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
+//                newViewModel.configure(month: representativeMonth, events: events)
+//                pageView.configure(with: newViewModel)
+//            }
+            
+            
 
             pageView.applyScope(.week, animated: false)
 
@@ -308,7 +340,7 @@ final class CalendarViewController: UIViewController {
         }
 
         updateMonthLabel(for: viewModel.selectedDate)
-        debugLogWeekPages(reason: "updateWeekPagesData", weekStarts: weekStarts)
+//        debugLogWeekPages(reason: "updateWeekPagesData", weekStarts: weekStarts)
     }
 
     private func startOfWeek(for date: Date) -> Date {
@@ -463,7 +495,7 @@ final class CalendarViewController: UIViewController {
             saveSelectedDate(viewModel.selectedDate)
             saveSelectedDateForWeek(viewModel.selectedDate)
             loadedMonthsForWeekScope.insert(getMonthKey(for: currentWeekAnchor))
-            updateWeekPagesData()
+            updateWeekPagesData(.up)
         case .month, .maxHeight:
             currentMonthAnchor = viewModel.selectedDate.startOfMonth
             loadedMonthsForWeekScope.removeAll()
@@ -550,7 +582,7 @@ final class CalendarViewController: UIViewController {
                 guard let self = self else { return }
                 // 刷新所有月份页面的数据
                 if self.unifiedCalendarScope == .week {
-                    self.updateWeekPagesData()
+                    self.updateWeekPagesData(.up)
                 }else {
                     self.updateMonthPagesData()
                 }
@@ -938,7 +970,7 @@ extension CalendarViewController: UIScrollViewDelegate {
             saveSelectedDate(storedSelection)
             saveSelectedDateForWeek(storedSelection)
             viewModel.selectedDate = storedSelection
-            updateWeekPagesData()
+            updateWeekPagesData(direction)
         } else {
             let delta = direction == .left ? -1 : 1
             currentMonthAnchor = calendar.date(byAdding: .month, value: delta, to: currentMonthAnchor) ?? currentMonthAnchor
@@ -984,6 +1016,7 @@ extension CalendarViewController: UIScrollViewDelegate {
     private enum Direction {
         case left   // 向左滑动（查看前一个月）
         case right  // 向右滑动（查看后一个月）
+        case up  // 向上滑动
     }
 }
 
