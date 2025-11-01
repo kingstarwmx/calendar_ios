@@ -226,7 +226,6 @@ final class CalendarViewController: UIViewController {
         guard monthPageViews.count == 3 else { return }
 
         let calendar = Calendar.current
-
         // 以当前选中日期定位中心周的起始日
         let anchorDate = viewModel.selectedDate
         let anchorWeekStart = startOfWeek(for: anchorDate)
@@ -242,7 +241,7 @@ final class CalendarViewController: UIViewController {
         ]
 
         for index in monthPageViews.indices {
-            var pageView = monthPageViews[index]
+            let pageView = monthPageViews[index]
             guard let weekStart = weekStarts[safe: index] else { continue }
             let weekStartDay = calendar.startOfDay(for: weekStart)
             let weekEndDay = calendar.date(byAdding: .day, value: 6, to: weekStartDay) ?? weekStartDay
@@ -283,66 +282,115 @@ final class CalendarViewController: UIViewController {
                     let existingViewModel = pageView.viewModel!
                     existingViewModel.configure(month: representativeMonth, events: events)
                 }else {
-                    pageView = MonthPageView()
-                    let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
-                    pageView.configure(with: newViewModel)
-                    newViewModel.configure(month: representativeMonth, events: events)
+//                    let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
+//                    pageView.configure(with: newViewModel)
+//                    newViewModel.configure(month: representativeMonth, events: events)
+//                    newViewModel.selectDate(selectedDateForPage)
+                    
+                    let oldFrame = pageView.frame
+                    pageView.removeFromSuperview()
+
+                    let newPageView = MonthPageView()
+                    configurePageViewCallbacks(newPageView)
+                    monthScrollView.addSubview(newPageView)
+                    monthPageViews[index] = newPageView
+                    newPageView.frame = oldFrame
+
+                    let newViewModel = MonthPageViewModel(month: representativeMonth,
+                                                          selectedDate: selectedDateForPage)
+                    newPageView.configure(with: newViewModel)                    // 先建绑定
+                    newViewModel.configure(month: representativeMonth, events: events) // 再推事件
                     newViewModel.selectDate(selectedDateForPage)
                 }
             } else if direction == .right {
                 if index == 2 {
+//                    let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
+//                    newViewModel.configure(month: representativeMonth, events: events)
+//                    pageView.configure(with: newViewModel)
+//                    newViewModel.selectDate(selectedDateForPage)
+                    
+                    let oldFrame = pageView.frame
+                    pageView.removeFromSuperview()
+
+                    let newPageView = MonthPageView()
+                    configurePageViewCallbacks(newPageView)
+                    monthScrollView.addSubview(newPageView)
+                    monthPageViews[index] = newPageView
+                    newPageView.frame = oldFrame
+                    
                     let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
                     newViewModel.configure(month: representativeMonth, events: events)
-                    pageView.configure(with: newViewModel)
+                    newPageView.configure(with: newViewModel)
                     newViewModel.selectDate(selectedDateForPage)
                 }
             } else if direction == .left {
                 if index == 0 {
+//                    let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
+//                    newViewModel.configure(month: representativeMonth, events: events)
+//                    pageView.configure(with: newViewModel)
+//                    newViewModel.selectDate(selectedDateForPage)
+                    
+                    let oldFrame = pageView.frame
+                    pageView.removeFromSuperview()
+
+                    let newPageView = MonthPageView()
+                    configurePageViewCallbacks(newPageView)
+                    monthScrollView.addSubview(newPageView)
+                    monthPageViews[index] = newPageView
+                    newPageView.frame = oldFrame
+                    
                     let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
                     newViewModel.configure(month: representativeMonth, events: events)
-                    pageView.configure(with: newViewModel)
+                    newPageView.configure(with: newViewModel)
                     newViewModel.selectDate(selectedDateForPage)
+                    
+                    
                 }
             }
             
-            
-            
-//            if let existingViewModel = pageView.viewModel  {
-//                existingViewModel.configure(month: representativeMonth, events: events)
-//                print("representativeMonth:\(representativeMonth.formatted()) selectedDateForPage:\(selectedDateForPage.formatted())")
-//                if !calendar.isDate(existingViewModel.selectedDate, inSameDayAs: selectedDateForPage) {
-//                    existingViewModel.selectDate(selectedDateForPage)
-//                    
-//                }
-//            } else {
-//                let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
-//                newViewModel.configure(month: representativeMonth, events: events)
-//                pageView.configure(with: newViewModel)
-//            }
-            
-            
+            let newPageView = monthPageViews[index]
+            newPageView.calendarView.scope = .week
+            newPageView.calendarView.setNeedsLayout()
+            newPageView.calendarView.layoutIfNeeded()
+            newPageView.layoutIfNeeded()
 
-            pageView.applyScope(.week, animated: false)
-
-            if let currentSelected = pageView.calendarView.selectedDate {
+            if let currentSelected = newPageView.calendarView.selectedDate {
                 if !calendar.isDate(currentSelected, inSameDayAs: selectedDateForPage) {
-                    pageView.calendarView.select(selectedDateForPage, scrollToDate: false)
+                    newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
                 }
             } else {
-                pageView.calendarView.select(selectedDateForPage, scrollToDate: false)
+                newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
             }
 
-            if !calendar.isDate(pageView.calendarView.currentPage, inSameDayAs: weekStartDay) {
-                pageView.calendarView.setCurrentPage(weekStartDay, animated: false)
+            if !calendar.isDate(newPageView.calendarView.currentPage, inSameDayAs: weekStartDay) {
+                newPageView.calendarView.setCurrentPage(weekStartDay, animated: false)
             }
-            pageView.calendarView.reloadData()
-            pageView.calendarView.layoutIfNeeded()
+            newPageView.calendarView.reloadData()
+            newPageView.calendarView.layoutIfNeeded()
         }
 
         updateMonthLabel(for: viewModel.selectedDate)
 //        debugLogWeekPages(reason: "updateWeekPagesData", weekStarts: weekStarts)
     }
+    private func configurePageViewCallbacks(_ pageView: MonthPageView) {
+        pageView.onDateSelected = { [weak self] date in
+            self?.handleDateSelection(date)
+        }
 
+        pageView.onEventSelected = { [weak self] event in
+            self?.handleEventSelection(event)
+        }
+
+        pageView.onCalendarScopeChanged = { [weak self] page, scope in
+            self?.handleCalendarScopeChange(from: page, to: scope)
+        }
+
+        pageView.onCalendarHeightChanged = { [weak self] height in
+            self?.handleCalendarHeightChange(height)
+        }
+
+        setupPageViewGesture(for: pageView)
+    }
     private func startOfWeek(for date: Date) -> Date {
         let calendar = Calendar.current
         let normalized = calendar.startOfDay(for: date)
