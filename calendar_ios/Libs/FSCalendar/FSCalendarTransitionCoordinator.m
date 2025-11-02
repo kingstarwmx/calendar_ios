@@ -513,6 +513,10 @@
     [self.calendar fs_setUnsignedIntegerVariable:targetScope forKey:@"_scope"];
     if (targetScope == FSCalendarScopeWeek) {
         [self.calendar fs_setVariable:attr.targetPage forKey:@"_currentPage"];
+        if ([self.calendar respondsToSelector:@selector(setCurrentMonth:)]) {
+            NSDate *month = [self.calendar.gregorian fs_firstDayOfMonth:attr.focusedDate];
+            [self.calendar setCurrentMonth:month];
+        }
     }
     [self.calendar didChangeValueForKey:@"scope"];
 

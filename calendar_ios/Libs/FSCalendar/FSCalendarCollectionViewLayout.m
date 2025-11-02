@@ -98,7 +98,7 @@
 
 - (void)prepareLayout
 {
-    NSInteger currentRows = [self.calendar.calculator numberOfRowsInMonth:self.calendar.currentPage];
+    NSInteger currentRows = [self.calendar.calculator numberOfRowsInMonth:self.calendar.currentMonth];
     
     if (CGSizeEqualToSize(self.collectionViewSize, self.collectionView.frame.size) && self.numberOfSections == self.collectionView.numberOfSections && self.separators == self.calendar.appearance.separators) {
         return;
@@ -261,7 +261,7 @@
     // Clipping
     rect = CGRectIntersection(rect, CGRectMake(0, 0, self.contentSize.width, self.contentSize.height));
     if (CGRectIsEmpty(rect)) return nil;
-    NSInteger currentRows = [self.calendar.calculator numberOfRowsInMonth:self.calendar.currentPage];
+    NSInteger currentRows = [self.calendar.calculator numberOfRowsInMonth:self.calendar.currentMonth];
     // Calculating attributes
     NSMutableArray<UICollectionViewLayoutAttributes *> *layoutAttributes = [NSMutableArray array];
     

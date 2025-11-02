@@ -139,6 +139,7 @@ class MonthPageView: UIView {
         setupBindings()
 
         // 初始设置 - 不立即 reloadData，让 Combine 绑定来触发
+        calendarView.currentMonth = viewModel.currentMonth
         calendarView.setCurrentPage(viewModel.currentMonth, animated: false)
         calendarView.select(viewModel.selectedDate, scrollToDate: false)
         let initialHeight = calendarHeight(for: viewModel.currentMonth)

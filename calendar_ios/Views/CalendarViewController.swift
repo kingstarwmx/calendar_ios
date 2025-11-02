@@ -124,6 +124,13 @@ final class CalendarViewController: UIViewController {
 
         monthLabel.font = UIFont.preferredFont(forTextStyle: .headline)
         monthLabel.textColor = .label
+        monthLabel.textAlignment = .center
+        monthLabel.setContentHuggingPriority(.required, for: .horizontal)
+        monthLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        monthLabel.widthAnchor.constraint(equalToConstant: 160).isActive = true
+        monthLabel.textAlignment = .center
+        monthLabel.setContentHuggingPriority(.required, for: .horizontal)
+        monthLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         view.addSubview(weekdayLabel)
         view.addSubview(monthScrollView)
@@ -155,6 +162,7 @@ final class CalendarViewController: UIViewController {
     /// 设置三个月份页面视图
     private func setupMonthPages() {
         let screenWidth = DeviceHelper.screenWidth
+        let defaultPageHeight = monthScrollView.bounds.height > 0 ? monthScrollView.bounds.height : 500
         let calendar = Calendar.current
         let selected = viewModel.selectedDate
         currentMonthAnchor = selected.startOfMonth
@@ -252,10 +260,18 @@ final class CalendarViewController: UIViewController {
                 representativeMonth = monthForWeek(startingAt: weekStartDay)
             }
 
+            // 计算代表月份在月视图下的实际展示区间（包含前置/后置填充，共42天）
+            let firstDayOfMonth = calendar.date(from: calendar.dateComponents([.year, .month],
+                                                                              from: representativeMonth))!
+            let firstWeekday = calendar.component(.weekday, from: firstDayOfMonth)
+            let daysToSubtract = firstWeekday - 1
+            let displayStartDate = calendar.date(byAdding: .day, value: -daysToSubtract, to: firstDayOfMonth)!
+            let displayEndDate = calendar.date(byAdding: .day, value: 41, to: displayStartDate)!
+
             let events = viewModel.events.filter { event in
                 let eventStart = calendar.startOfDay(for: event.startDate)
                 let eventEnd = calendar.startOfDay(for: event.endDate)
-                return eventEnd >= weekStartDay && eventStart <= weekEndDay
+                return eventEnd >= displayStartDate && eventStart <= displayEndDate
             }
 
             var selectedDateForPage = getSelectedDateForWeek(startingAt: weekStartDay)
@@ -281,6 +297,7 @@ final class CalendarViewController: UIViewController {
                 if index == 1 {
                     let existingViewModel = pageView.viewModel!
                     existingViewModel.configure(month: representativeMonth, events: events)
+                    pageView.calendarView.currentMonth = representativeMonth
                 }else {
 //                    let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
 //                    pageView.configure(with: newViewModel)
@@ -319,8 +336,8 @@ final class CalendarViewController: UIViewController {
                     newPageView.frame = oldFrame
                     
                     let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
-                    newViewModel.configure(month: representativeMonth, events: events)
                     newPageView.configure(with: newViewModel)
+                    newViewModel.configure(month: representativeMonth, events: events)
                     newViewModel.selectDate(selectedDateForPage)
                 }
             } else if direction == .left {
@@ -340,8 +357,8 @@ final class CalendarViewController: UIViewController {
                     newPageView.frame = oldFrame
                     
                     let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
-                    newViewModel.configure(month: representativeMonth, events: events)
                     newPageView.configure(with: newViewModel)
+                    newViewModel.configure(month: representativeMonth, events: events)
                     newViewModel.selectDate(selectedDateForPage)
                     
                     
@@ -349,10 +366,6 @@ final class CalendarViewController: UIViewController {
             }
             
             let newPageView = monthPageViews[index]
-            newPageView.calendarView.scope = .week
-            newPageView.calendarView.setNeedsLayout()
-            newPageView.calendarView.layoutIfNeeded()
-            newPageView.layoutIfNeeded()
 
             if let currentSelected = newPageView.calendarView.selectedDate {
                 if !calendar.isDate(currentSelected, inSameDayAs: selectedDateForPage) {
@@ -361,11 +374,16 @@ final class CalendarViewController: UIViewController {
             } else {
                 newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
             }
+            
+            newPageView.calendarView.scope = .week
 
             if !calendar.isDate(newPageView.calendarView.currentPage, inSameDayAs: weekStartDay) {
                 newPageView.calendarView.setCurrentPage(weekStartDay, animated: false)
+//                newPageView.calendarView.currentPage = weekStartDay
             }
-            newPageView.calendarView.reloadData()
+            
+            
+            newPageView.calendarView.setNeedsLayout()
             newPageView.calendarView.layoutIfNeeded()
         }
 

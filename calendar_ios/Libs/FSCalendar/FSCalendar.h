@@ -279,6 +279,11 @@ IB_DESIGNABLE
 @property (strong, nonatomic) NSDate *currentPage;
 
 /**
+ * 指定用于计算行数与高度的“当前月份”。若未设置，默认与 currentPage 保持一致。
+ */
+@property (nullable, strong, nonatomic) NSDate *currentMonth;
+
+/**
  * The locale of month and weekday symbols. Change it to display them in your own language.
  *
  * e.g. To display them in Chinese:

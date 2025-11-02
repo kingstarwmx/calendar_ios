@@ -46,6 +46,7 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
 @interface FSCalendar ()<UICollectionViewDataSource,UICollectionViewDelegate,FSCalendarCollectionViewInternalDelegate,UIGestureRecognizerDelegate>
 {
     NSMutableArray  *_selectedDates;
+    NSDate          *_currentMonthOverride;
 }
 
 @property (strong, nonatomic) NSCalendar *gregorian;
@@ -305,7 +306,8 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
         }
         
         _contentView.frame = self.bounds;
-        NSInteger currentRows = [self.calculator numberOfRowsInMonth:self.currentPage];
+        NSDate *rowHeightMonth = self.currentMonth;
+        NSInteger currentRows = [self.calculator numberOfRowsInMonth:rowHeightMonth];
         CGFloat headerHeight = self.preferredHeaderHeight;
         CGFloat weekdayHeight = self.preferredWeekdayHeight;
         CGFloat rowHeight = self.preferredRowHeight;
@@ -382,7 +384,7 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
     if (!self.floatingMode) {
         switch (scope) {
             case FSCalendarScopeMonth: {
-                CGFloat height = weekdayHeight + headerHeight + [self.calculator numberOfRowsInMonth:_currentPage]*monthRowHeight + paddings;
+                CGFloat height = weekdayHeight + headerHeight + [self.calculator numberOfRowsInMonth:self.currentMonth]*monthRowHeight + paddings;
                 return CGSizeMake(size.width, height);
             }
             case FSCalendarScopeWeek: {
@@ -390,7 +392,7 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
                 return CGSizeMake(size.width, height);
             }
             case FSCalendarScopeMaxHeight: {
-                CGFloat height = weekdayHeight + headerHeight + [self.calculator numberOfRowsInMonth:_currentPage]*maxRowHeight + paddings;
+                CGFloat height = weekdayHeight + headerHeight + [self.calculator numberOfRowsInMonth:self.currentMonth]*maxRowHeight + paddings;
                 return CGSizeMake(size.width, height);
             }
         }
@@ -773,6 +775,27 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
     [self setCurrentPage:currentPage animated:NO];
 }
 
+- (void)setCurrentMonth:(NSDate *)currentMonth
+{
+    NSDate *normalized = currentMonth ? [self.gregorian fs_firstDayOfMonth:currentMonth] : nil;
+    BOOL changed = NO;
+    if (_currentMonthOverride && normalized) {
+        changed = ![_currentMonthOverride isEqualToDate:normalized];
+    } else {
+        changed = (!(_currentMonthOverride == nil && normalized == nil));
+    }
+    if (changed) {
+        _currentMonthOverride = normalized;
+        [self invalidateRowMetrics];
+        [self setNeedsLayout];
+    }
+}
+
+- (NSDate *)currentMonth
+{
+    return _currentMonthOverride ?: self.currentPage;
+}
+
 - (void)setCurrentPage:(NSDate *)currentPage animated:(BOOL)animated
 {
     [self requestBoundingDatesIfNecessary];
@@ -781,6 +804,11 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
         if ([self isPageInRange:currentPage]) {
             [self scrollToPageForDate:currentPage animated:animated];
         }
+    }
+    if (_currentMonthOverride == nil) {
+        NSDate *month = [self.gregorian fs_firstDayOfMonth:currentPage];
+        _currentMonthOverride = month;
+        [self invalidateRowMetrics];
     }
 }
 
@@ -993,10 +1021,11 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
         CGFloat contentHeight = self.transitionCoordinator.cachedMonthSize.height-headerHeight-weekdayHeight;
         CGFloat padding = 0;
         if (!self.floatingMode) {
-            NSInteger currentRows = [self.calculator numberOfRowsInMonth:self.currentPage];
+            NSDate *rowHeightMonth = self.currentMonth;
+    NSInteger currentRows = [self.calculator numberOfRowsInMonth:rowHeightMonth];
             _preferredRowHeight = (contentHeight-padding*2)/currentRows;
         } else {
-            _preferredRowHeight = _rowHeight;
+            _preferredRowHeight = _rowHeight;   
         }
     }
     return _preferredRowHeight;
@@ -1031,7 +1060,8 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
     CGFloat weekdayHeight = self.preferredWeekdayHeight;
     CGFloat contentHeight = cachedSize.height - headerHeight - weekdayHeight;
     CGFloat padding = 0;
-    NSInteger currentRows = [self.calculator numberOfRowsInMonth:self.currentPage];
+    NSDate *rowHeightMonth = self.currentMonth;
+    NSInteger currentRows = [self.calculator numberOfRowsInMonth:rowHeightMonth];
     if (contentHeight <= 0) {
         return MAX(_rowHeight, FSCalendarStandardRowHeight);
     }
@@ -1043,7 +1073,8 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
     CGFloat baselineRow = [self baselineRowHeight];
     CGFloat headerHeight = self.preferredHeaderHeight;
     CGFloat weekdayHeight = self.preferredWeekdayHeight;
-    NSInteger currentRows = [self.calculator numberOfRowsInMonth:self.currentPage];
+    NSDate *rowHeightMonth = self.currentMonth;
+    NSInteger currentRows = [self.calculator numberOfRowsInMonth:rowHeightMonth];
     CGFloat padding = self.collectionViewLayout.sectionInsets.top + self.collectionViewLayout.sectionInsets.bottom;
     CGFloat baselineTotal = headerHeight + weekdayHeight + baselineRow * currentRows + padding;
     CGFloat targetTotal = _maxHeight > 0 ? MAX(_maxHeight, baselineTotal) : baselineTotal;
@@ -1266,7 +1297,8 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
 #pragma mark - Private methods
 - (CGFloat)getCurrentCellHeight{
 //    return self.collectionView.frame.size.height / 6.0;
-    NSInteger currentRows = [self.calculator numberOfRowsInMonth:self.currentPage];
+    NSDate *rowHeightMonth = self.currentMonth;
+    NSInteger currentRows = [self.calculator numberOfRowsInMonth:rowHeightMonth];
     if (self.scope == FSCalendarScopeWeek) {
         return  self.collectionView.frame.size.height;
     } else {
@@ -1679,6 +1711,13 @@ typedef NS_ENUM(NSUInteger, FSCalendarOrientation) {
     
     [self setNeedsLayout];
     
+}
+
+- (void)invalidateRowMetrics
+{
+    _preferredHeaderHeight  = FSCalendarAutomaticDimension;
+    _preferredWeekdayHeight = FSCalendarAutomaticDimension;
+    _preferredRowHeight     = FSCalendarAutomaticDimension;
 }
 
 // The best way to detect orientation
