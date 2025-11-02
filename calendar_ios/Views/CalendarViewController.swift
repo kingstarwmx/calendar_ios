@@ -552,7 +552,9 @@ final class CalendarViewController: UIViewController {
     private func handleCalendarScopeChange(from source: MonthPageView, to scope: FSCalendarScope) {
         guard unifiedCalendarScope != scope else { return }
         unifiedCalendarScope = scope
-
+//        return
+        
+        print("handleCalendarScopeChange")
         switch scope {
         case .week:
             let anchor = startOfWeek(for: viewModel.selectedDate)
@@ -570,9 +572,9 @@ final class CalendarViewController: UIViewController {
             break
         }
 
-        for page in monthPageViews where page !== source {
-            page.applyScope(scope, animated: false)
-        }
+//        for page in monthPageViews where page !== source {
+//            page.applyScope(scope, animated: false)
+//        }
     }
 
     /// 处理日历高度变化
@@ -760,6 +762,13 @@ final class CalendarViewController: UIViewController {
     }
 
     @objc private func addTapped() {
+        /**
+         人工卡顿: 触发时让主线程睡眠 3 秒
+         便于 Matrix 的卡顿监控插件验证是否能捕捉到 RunLoop 卡顿
+         */
+        print("addTapped")
+        Thread.sleep(forTimeInterval: 3)
+
         let controller = AddEventViewController()
         controller.onSave = { [weak self] event in
             guard let self else { return }

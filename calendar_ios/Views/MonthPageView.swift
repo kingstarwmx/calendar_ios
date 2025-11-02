@@ -439,6 +439,8 @@ extension MonthPageView: FSCalendarDelegate {
 //        }
 
         // 通知外部
+        print("boundingRectWillChange")
+        print("bounds.height:\(bounds.height)")
         if suppressScopeCallback {
             return
         }
