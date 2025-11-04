@@ -230,7 +230,7 @@ final class CalendarViewController: UIViewController {
         // tableView 的滑动手势需要等待 scope 手势失败
         pageView.tableView.panGestureRecognizer.require(toFail: panGesture)
     }
-    private func updateWeekPagesData(_ direction: Direction) {
+    private func c(_ direction: Direction) {
         guard monthPageViews.count == 3 else { return }
 
         let calendar = Calendar.current
@@ -299,10 +299,6 @@ final class CalendarViewController: UIViewController {
                     existingViewModel.configure(month: representativeMonth, events: events)
                     pageView.calendarView.currentMonth = representativeMonth
                 }else {
-//                    let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
-//                    pageView.configure(with: newViewModel)
-//                    newViewModel.configure(month: representativeMonth, events: events)
-//                    newViewModel.selectDate(selectedDateForPage)
                     
                     let oldFrame = pageView.frame
                     pageView.removeFromSuperview()
@@ -321,10 +317,6 @@ final class CalendarViewController: UIViewController {
                 }
             } else if direction == .right {
                 if index == 2 {
-//                    let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
-//                    newViewModel.configure(month: representativeMonth, events: events)
-//                    pageView.configure(with: newViewModel)
-//                    newViewModel.selectDate(selectedDateForPage)
                     
                     let oldFrame = pageView.frame
                     pageView.removeFromSuperview()
@@ -342,10 +334,6 @@ final class CalendarViewController: UIViewController {
                 }
             } else if direction == .left {
                 if index == 0 {
-//                    let newViewModel = MonthPageViewModel(month: representativeMonth, selectedDate: selectedDateForPage)
-//                    newViewModel.configure(month: representativeMonth, events: events)
-//                    pageView.configure(with: newViewModel)
-//                    newViewModel.selectDate(selectedDateForPage)
                     
                     let oldFrame = pageView.frame
                     pageView.removeFromSuperview()
@@ -360,8 +348,6 @@ final class CalendarViewController: UIViewController {
                     newPageView.configure(with: newViewModel)
                     newViewModel.configure(month: representativeMonth, events: events)
                     newViewModel.selectDate(selectedDateForPage)
-                    
-                    
                 }
             }
             
@@ -379,7 +365,6 @@ final class CalendarViewController: UIViewController {
 
             if !calendar.isDate(newPageView.calendarView.currentPage, inSameDayAs: weekStartDay) {
                 newPageView.calendarView.setCurrentPage(weekStartDay, animated: false)
-//                newPageView.calendarView.currentPage = weekStartDay
             }
             
             
@@ -554,7 +539,6 @@ final class CalendarViewController: UIViewController {
         unifiedCalendarScope = scope
 //        return
         
-        print("handleCalendarScopeChange")
         switch scope {
         case .week:
             let anchor = startOfWeek(for: viewModel.selectedDate)
@@ -563,11 +547,23 @@ final class CalendarViewController: UIViewController {
             saveSelectedDate(viewModel.selectedDate)
             saveSelectedDateForWeek(viewModel.selectedDate)
             loadedMonthsForWeekScope.insert(getMonthKey(for: currentWeekAnchor))
-            updateWeekPagesData(.up)
+
+            CATransaction.begin()
+            CATransaction.setCompletionBlock { [weak self] in
+                self?.updateWeekPagesData(.up)
+            }
+            CATransaction.commit()
+            return
         case .month, .maxHeight:
             currentMonthAnchor = viewModel.selectedDate.startOfMonth
             loadedMonthsForWeekScope.removeAll()
-            updateMonthPagesData()
+            
+            CATransaction.begin()
+            CATransaction.setCompletionBlock { [weak self] in
+                self?.updateMonthPagesData()
+            }
+            CATransaction.commit()
+            
         @unknown default:
             break
         }
