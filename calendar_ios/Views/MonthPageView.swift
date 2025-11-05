@@ -61,6 +61,9 @@ class MonthPageView: UIView {
     /// 日期选择回调
     var onDateSelected: ((Date) -> Void)?
 
+    /// 选中跨月日期时的回调（用于外部切换月份）
+    var onAdjacentMonthDateSelected: ((MonthPageView, Date, FSCalendarMonthPosition) -> Void)?
+
     /// 事件选择回调
     var onEventSelected: ((Event) -> Void)?
 
@@ -420,7 +423,17 @@ extension MonthPageView: FSCalendarDataSource {
 // MARK: - FSCalendarDelegate
 
 extension MonthPageView: FSCalendarDelegate {
-
+    func calendar(_ calendar: FSCalendar, shouldSelect date: Date, at monthPosition: FSCalendarMonthPosition) -> Bool {
+        if monthPosition == .previous || monthPosition == .next {
+            if calendar.scope != .week,
+               monthPosition == .next || monthPosition == .previous {
+                onAdjacentMonthDateSelected?(self, date, monthPosition)
+            }
+            return false
+        }
+        return true
+    }
+    
     func calendar(_ calendar: FSCalendar, didSelect date: Date, at monthPosition: FSCalendarMonthPosition) {
         // 更新 ViewModel
         viewModel?.selectDate(date)
@@ -443,11 +456,6 @@ extension MonthPageView: FSCalendarDelegate {
             return
         }
         onCalendarScopeChanged?(self, calendar.scope)
-    }
-
-    func calendar(_ calendar: FSCalendar, shouldSelect date: Date, at monthPosition: FSCalendarMonthPosition) -> Bool {
-        // 可以添加日期选择的业务逻辑
-        return true
     }
 
     func calendar(_ calendar: FSCalendar, willDisplay cell: FSCalendarCell, for date: Date, at position: FSCalendarMonthPosition) {

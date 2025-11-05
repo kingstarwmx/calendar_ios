@@ -35,6 +35,8 @@ final class CalendarViewController: UIViewController {
 
     /// 是否正在重置 scrollView 位置（避免递归调用）
     private var isResettingScrollView = false
+    /// 计划在滚动结束后选中的日期（用于跨月点击）
+    private var pendingSelectedDate: Date?
 
     /// 手势方向判断阈值（垂直速度必须 > 横向速度 * 此值才认为是垂直滑动）
     /// 值越小越灵敏，但容易误触；值越大越准确，但灵敏度降低
@@ -177,30 +179,11 @@ final class CalendarViewController: UIViewController {
 
             // 创建 View
             let pageView = MonthPageView()
+            configurePageViewCallbacks(pageView)
 
             // 配置 View 和 ViewModel
             pageView.configure(with: viewModel)
             pageView.applyScope(unifiedCalendarScope, animated: false)
-
-            // 设置回调
-            pageView.onDateSelected = { [weak self] date in
-                self?.handleDateSelection(date)
-            }
-
-            pageView.onEventSelected = { [weak self] event in
-                self?.handleEventSelection(event)
-            }
-
-            pageView.onCalendarScopeChanged = { [weak self] page, scope in
-                self?.handleCalendarScopeChange(from: page, to: scope)
-            }
-
-            pageView.onCalendarHeightChanged = { [weak self] height in
-                self?.handleCalendarHeightChange(height)
-            }
-
-            // 设置手势处理
-            setupPageViewGesture(for: pageView)
 
             monthScrollView.addSubview(pageView)
             monthPageViews.append(pageView)
@@ -347,6 +330,9 @@ final class CalendarViewController: UIViewController {
     private func configurePageViewCallbacks(_ pageView: MonthPageView) {
         pageView.onDateSelected = { [weak self] date in
             self?.handleDateSelection(date)
+        }
+        pageView.onAdjacentMonthDateSelected = { [weak self] page, date, position in
+            self?.handleAdjacentMonthSelection(from: page, date: date, position: position)
         }
 
         pageView.onEventSelected = { [weak self] event in
@@ -504,6 +490,75 @@ final class CalendarViewController: UIViewController {
             saveSelectedDate(normalizedDate)
             updateMonthLabel(for: normalizedDate)
             viewModel.selectedDate = normalizedDate
+        }
+    }
+
+    private func handleAdjacentMonthSelection(from page: MonthPageView, date: Date, position: FSCalendarMonthPosition) {
+        guard unifiedCalendarScope != .week else {
+            handleDateSelection(date)
+            return
+        }
+
+        guard position == .previous || position == .next else {
+            handleDateSelection(date)
+            return
+        }
+
+        guard !isResettingScrollView else {
+            return
+        }
+
+        guard pendingSelectedDate == nil else {
+            return
+        }
+
+        let calendar = Calendar.current
+        let normalizedDate = calendar.startOfDay(for: date)
+        pendingSelectedDate = normalizedDate
+        saveSelectedDate(normalizedDate)
+
+        let targetIndex = position == .previous ? 0 : 2
+        if let targetPage = monthPageViews[safe: targetIndex] {
+            if let viewModel = targetPage.viewModel,
+               !calendar.isDate(viewModel.selectedDate, inSameDayAs: normalizedDate) {
+                viewModel.selectDate(normalizedDate)
+            }
+
+            if let currentSelected = targetPage.calendarView.selectedDate {
+                if !calendar.isDate(currentSelected, inSameDayAs: normalizedDate) {
+                    targetPage.calendarView.select(normalizedDate, scrollToDate: false)
+                }
+            } else {
+                targetPage.calendarView.select(normalizedDate, scrollToDate: false)
+            }
+
+            if !calendar.isDate(targetPage.calendarView.currentPage, inSameDayAs: normalizedDate) {
+                targetPage.calendarView.setCurrentPage(normalizedDate, animated: false)
+            }
+
+            targetPage.calendarView.setNeedsLayout()
+            targetPage.calendarView.layoutIfNeeded()
+        }
+
+        let screenWidth = DeviceHelper.screenWidth
+        let targetOffsetX: CGFloat
+
+        switch position {
+        case .previous:
+            targetOffsetX = 0
+        case .next:
+            targetOffsetX = screenWidth * 2
+        default:
+            pendingSelectedDate = nil
+            handleDateSelection(date)
+            return
+        }
+
+        if abs(monthScrollView.contentOffset.x - targetOffsetX) < 0.5 {
+            let direction: Direction = position == .previous ? .left : .right
+            resetScrollViewPosition(direction: direction)
+        } else {
+            monthScrollView.setContentOffset(CGPoint(x: targetOffsetX, y: 0), animated: true)
         }
     }
 
@@ -981,15 +1036,12 @@ extension CalendarViewController: UIGestureRecognizerDelegate {
 extension CalendarViewController: UIScrollViewDelegate {
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         guard scrollView == monthScrollView, !isResettingScrollView else { return }
+        handleScrollCompletion(for: scrollView)
+    }
 
-        let screenWidth = DeviceHelper.screenWidth
-        let offsetX = scrollView.contentOffset.x
-
-        if offsetX <= 0 {
-            resetScrollViewPosition(direction: .left)
-        } else if offsetX >= screenWidth * 2 {
-            resetScrollViewPosition(direction: .right)
-        }
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        guard scrollView == monthScrollView, !isResettingScrollView else { return }
+        handleScrollCompletion(for: scrollView)
     }
 
     /// 重置 ScrollView 位置和页面数据
@@ -1018,6 +1070,7 @@ extension CalendarViewController: UIScrollViewDelegate {
 
         // 根据当前模式更新数据
         if unifiedCalendarScope == .week {
+            pendingSelectedDate = nil
             let delta = direction == .left ? -1 : 1
             currentWeekAnchor = calendar.date(byAdding: .weekOfYear, value: delta, to: currentWeekAnchor) ?? currentWeekAnchor
             currentMonthAnchor = currentWeekAnchor.startOfMonth
@@ -1029,7 +1082,18 @@ extension CalendarViewController: UIScrollViewDelegate {
         } else {
             let delta = direction == .left ? -1 : 1
             currentMonthAnchor = calendar.date(byAdding: .month, value: delta, to: currentMonthAnchor) ?? currentMonthAnchor
-            let centerSelectedDate = getSelectedDateForMonth(currentMonthAnchor)
+            let normalizedPending = pendingSelectedDate.map { calendar.startOfDay(for: $0) }
+            let centerSelectedDate: Date
+
+            if let pending = normalizedPending {
+                centerSelectedDate = pending
+                pendingSelectedDate = nil
+            } else {
+                centerSelectedDate = getSelectedDateForMonth(currentMonthAnchor)
+            }
+
+            currentMonthAnchor = centerSelectedDate.startOfMonth
+            currentWeekAnchor = startOfWeek(for: centerSelectedDate)
             viewModel.selectedDate = centerSelectedDate
             saveSelectedDate(centerSelectedDate)
             updateMonthPagesData(direction)
@@ -1065,6 +1129,17 @@ extension CalendarViewController: UIScrollViewDelegate {
         }
 
         isResettingScrollView = false
+    }
+
+    private func handleScrollCompletion(for scrollView: UIScrollView) {
+        let screenWidth = DeviceHelper.screenWidth
+        let offsetX = scrollView.contentOffset.x
+
+        if offsetX <= 0 {
+            resetScrollViewPosition(direction: .left)
+        } else if offsetX >= screenWidth * 2 {
+            resetScrollViewPosition(direction: .right)
+        }
     }
 
     /// 滑动方向
