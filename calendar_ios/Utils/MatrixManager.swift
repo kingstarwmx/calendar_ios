@@ -92,14 +92,18 @@ final class MatrixManager: NSObject, MatrixPluginListenerDelegate, WCCrashBlockM
         let tag = issue.issueTag ?? "unknown"
         let info = issue.customInfo ?? [:]
         debugLog("[Matrix] issue tag: \(tag) info: \(info)")
+
+        if issue.reportType == EDumpType.mainThreadBlock.rawValue {
+            handleMainThreadBlockIssue(issue)
+        }
     }
     
     // MARK: - WCCrashBlockMonitorDelegate
-    func onCrashBlockMonitorRunloopHangDetected(_ duration: UInt64) {
+    @objc func onCrashBlockMonitorRunloopHangDetected(_ duration: UInt64) {
             debugLog("[Matrix] runloop hang \(duration / 1000) ms")
     }
 
-    func onCrashBlockMonitorGetDumpFile(_ dumpFile: String!, with dumpType: EDumpType) {
+    @objc func onCrashBlockMonitorGetDumpFile(_ dumpFile: String!, with dumpType: EDumpType) {
         guard dumpType == .mainThreadBlock else { return }
 
         let url = URL(fileURLWithPath: dumpFile)
@@ -121,5 +125,106 @@ final class MatrixManager: NSObject, MatrixPluginListenerDelegate, WCCrashBlockM
 #if DEBUG
         print(message)
 #endif
+    }
+
+    private func handleMainThreadBlockIssue(_ issue: MatrixIssue) {
+        guard let frames = loadBlockFrames(from: issue) else {
+            debugLog("[Matrix] main-thread block detected but stack not available")
+            return
+        }
+
+        if let culprit = frames.first(where: { isAppFrame($0) }) ?? frames.first {
+            debugLog("[Matrix] 💥 卡顿疑似由此触发: \(culprit)")
+        }
+
+        debugLog("====== Matrix 卡顿堆栈（前 10 帧） ======")
+        frames.prefix(10).forEach { debugLog($0) }
+        debugLog("=================================")
+    }
+
+    private func loadBlockFrames(from issue: MatrixIssue) -> [String]? {
+        switch issue.dataType {
+        case .filePath:
+            guard let path = issue.filePath else { return nil }
+            let url = URL(fileURLWithPath: path)
+            return loadBlockFrames(from: url)
+        case .data:
+            guard let data = issue.issueData else { return nil }
+            return parseBlockFrames(from: data)
+        default:
+            return nil
+        }
+    }
+
+    private func loadBlockFrames(from url: URL) -> [String]? {
+        var isDirectory: ObjCBool = false
+        let fm = FileManager.default
+        if fm.fileExists(atPath: url.path, isDirectory: &isDirectory) {
+            if isDirectory.boolValue {
+                let directJSON = url.appendingPathComponent("BlockMainThread.json")
+                if let data = try? Data(contentsOf: directJSON) {
+                    return parseBlockFrames(from: data)
+                }
+
+                if let enumerator = fm.enumerator(at: url, includingPropertiesForKeys: nil) {
+                    for case let fileURL as URL in enumerator where fileURL.lastPathComponent == "BlockMainThread.json" {
+                        if let data = try? Data(contentsOf: fileURL) {
+                            return parseBlockFrames(from: data)
+                        }
+                    }
+                }
+            } else {
+                switch url.pathExtension.lowercased() {
+                case "json":
+                    if let data = try? Data(contentsOf: url) {
+                        return parseBlockFrames(from: data)
+                    }
+                default:
+                    break
+                }
+            }
+        }
+        return nil
+    }
+
+    private func parseBlockFrames(from data: Data) -> [String]? {
+        guard
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let stacks = json["frame_stack"] as? [[String: Any]]
+        else {
+            return nil
+        }
+
+        for stack in stacks {
+            if let stackStrings = stack["stack_string"] as? [String], !stackStrings.isEmpty {
+                return stackStrings
+            }
+        }
+
+        return nil
+    }
+
+    private func isAppFrame(_ frame: String) -> Bool {
+        let lowercased = frame.lowercased()
+        let systemPrefixes = [
+            "libsystem",
+            "libdispatch",
+            "libobjc",
+            "corefoundation",
+            "uikitcore",
+            "quartzcore",
+            "graphicsservices",
+            "dyld"
+        ]
+
+        if systemPrefixes.contains(where: { lowercased.contains($0) }) {
+            return false
+        }
+
+        if lowercased.contains(".app/") {
+            return true
+        }
+
+        return lowercased.contains("calendar_ios")
     }
 }
