@@ -114,10 +114,9 @@ final class CalendarViewController: UIViewController {
 
         navigationItem.titleView = monthLabel
 
-        // 右侧按钮组：添加事件按钮 + 调试按钮
-        let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addTapped))
+        // 右侧按钮组：调试按钮
         let debugButton = UIBarButtonItem(title: "🐛", style: .plain, target: self, action: #selector(debugExportTapped))
-        navigationItem.rightBarButtonItems = [addButton, debugButton]
+        navigationItem.rightBarButtonItems = [debugButton]
 
         // 左侧按钮组：设置 + 测试按钮
         let settingsButton = UIBarButtonItem(title: "设置", style: .plain, target: self, action: #selector(settingsTapped))
@@ -164,7 +163,6 @@ final class CalendarViewController: UIViewController {
     /// 设置三个月份页面视图
     private func setupMonthPages() {
         let screenWidth = DeviceHelper.screenWidth
-        let defaultPageHeight = monthScrollView.bounds.height > 0 ? monthScrollView.bounds.height : 500
         let calendar = Calendar.current
         let selected = viewModel.selectedDate
         currentMonthAnchor = selected.startOfMonth
@@ -727,6 +725,9 @@ final class CalendarViewController: UIViewController {
     private func setupInputToolbar() {
         // 设置选中日期
         inputToolbar.selectedDate = viewModel.selectedDate
+        inputToolbar.onAddTapped = { [weak self] in
+            self?.presentAddEventController()
+        }
 
         // 使用SnapKit设置约束
         inputToolbar.snp.makeConstraints { make in
@@ -796,14 +797,7 @@ final class CalendarViewController: UIViewController {
         NotificationCenter.default.removeObserver(self)
     }
 
-    @objc private func addTapped() {
-        /**
-         人工卡顿: 触发时让主线程睡眠 3 秒
-         便于 Matrix 的卡顿监控插件验证是否能捕捉到 RunLoop 卡顿
-         */
-        print("addTapped")
-        Thread.sleep(forTimeInterval: 3)
-
+    private func presentAddEventController() {
         let controller = AddEventViewController()
         controller.onSave = { [weak self] event in
             guard let self else { return }

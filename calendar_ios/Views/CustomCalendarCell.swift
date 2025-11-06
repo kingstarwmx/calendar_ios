@@ -7,6 +7,7 @@ struct EventPosition {
     let isEnd: Bool
 }
 
+
 private final class EventSlotView: UIView {
 
     enum LabelMode {
@@ -32,7 +33,7 @@ private final class EventSlotView: UIView {
     private let eventBar = UIView()
     private let textLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 10, weight: .semibold)
+        label.font = UIFont.systemFont(ofSize: 10, weight: .regular)
         label.clipsToBounds = false
         label.isHidden = true
         return label
@@ -278,11 +279,12 @@ class CustomCalendarCell: FSCalendarCell {
 
     /// 布局相关常量
     struct LayoutMetrics {
-        let separatorHeight: CGFloat
-        let titleTopInset: CGFloat
+        let separatorHeight: CGFloat //分割线高度
+        let titleTopInset: CGFloat//顶部间距
         let titleHeight: CGFloat
         let eventSlotHeight: CGFloat
         let eventSlotSpacing: CGFloat
+        let bottomSpacing: CGFloat
 
         var reservedHeight: CGFloat {
             separatorHeight + titleTopInset + titleHeight
@@ -293,8 +295,9 @@ class CustomCalendarCell: FSCalendarCell {
         separatorHeight: 1.0 / UIScreen.main.scale,
         titleTopInset: 2,
         titleHeight: 24,
-        eventSlotHeight: 14,
-        eventSlotSpacing: 1
+        eventSlotHeight: 13,
+        eventSlotSpacing: 1,
+        bottomSpacing: 5
     )
 
     /// 最大显示事件数（默认值，若未设置 maxVisibleSlots 时使用）
@@ -403,8 +406,12 @@ class CustomCalendarCell: FSCalendarCell {
             customTitleLabel.textColor = .label
         } else {
             customTitleLabel.font = UIFont.systemFont(ofSize: titleFontSize, weight: .medium)
-            customTitleLabel.textColor = isPlaceholder ? .systemGray3 : .label
+            customTitleLabel.textColor = isPlaceholder ? .tertiaryLabel : .label
         }
+
+        let placeholderAlpha: CGFloat = isPlaceholder ? 0.6 : 1.0
+        eventsContainerView.alpha = placeholderAlpha
+        eventSlots.forEach { $0.alpha = placeholderAlpha }
 
         // 更新 shapeLayer 显示状态
         if isSelected {
@@ -429,12 +436,15 @@ class CustomCalendarCell: FSCalendarCell {
     }
 
     /// 配置单元格数据
-    func configure(with date: Date, events: [Event]) {
-        self.currentDate = date
-        self.currentEvents = events
+    func configure(with date: Date, events: [Event], isPlaceholder: Bool = false) {
+        currentDate = date
+        currentEvents = events
 
-        // 配置事件列表
         configureEvents(events: events, date: date)
+
+        let placeholderAlpha: CGFloat = isPlaceholder ? 0.35 : 1.0
+        eventsContainerView.alpha = placeholderAlpha
+        eventSlots.forEach { $0.alpha = placeholderAlpha }
     }
 
     /// 根据新的槽位上限更新显示

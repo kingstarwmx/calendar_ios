@@ -111,6 +111,9 @@ class InputToolbarView: UIView {
     /// 语音录制结束回调
     var onVoiceRecordEnd: (() -> Void)?
 
+    /// 添加按钮点击回调
+    var onAddTapped: (() -> Void)?
+
     // MARK: - 初始化
 
     override init(frame: CGRect) {
@@ -194,6 +197,7 @@ class InputToolbarView: UIView {
 
         // 按钮点击事件
         voiceButton.addTarget(self, action: #selector(toggleVoiceMode), for: .touchUpInside)
+        addButton.addTarget(self, action: #selector(addButtonTapped), for: .touchUpInside)
 
         // 更新提示语
         updatePlaceholder()
@@ -244,6 +248,11 @@ class InputToolbarView: UIView {
     /// 文本框内容变化
     @objc private func textFieldDidChange() {
         // 可以在这里处理文本变化事件
+    }
+
+    /// 添加按钮点击
+    @objc private func addButtonTapped() {
+        onAddTapped?()
     }
 
     /// 更新输入框提示语

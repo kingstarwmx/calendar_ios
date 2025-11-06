@@ -264,7 +264,7 @@ class MonthPageView: UIView {
         let slots = baselineSlotLimit()
         let slotHeight = CGFloat(slots) * metrics.eventSlotHeight
         let spacing = CGFloat(max(slots, 0)) * metrics.eventSlotSpacing
-        return metrics.reservedHeight + slotHeight + spacing
+        return metrics.reservedHeight + slotHeight + spacing + metrics.bottomSpacing
     }
 
     private func calendarHeight(for month: Date) -> CGFloat {
@@ -375,7 +375,8 @@ extension MonthPageView: FSCalendarDataSource {
         let capacity = cachedCapacity(for: calendar.currentPage)
         cell.ensureSlotCapacity(capacity)
         cell.updateSlotLimit(currentSlotLimit, refresh: false)
-        cell.configure(with: date, events: events)
+        let isPlaceholder = position != .current
+        cell.configure(with: date, events: events, isPlaceholder: isPlaceholder)
 
         // 检查是否有连续事件的开始位置，如果有，提升该 cell 的层级
         for event in events {
