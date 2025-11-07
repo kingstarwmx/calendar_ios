@@ -445,43 +445,62 @@ final class AddEventViewController: UIViewController {
             ("每月", RepeatRule(frequency: .monthly)),
             ("每年", RepeatRule(frequency: .yearly))
         ]
+        let alert = UIAlertController(title: "重复", message: nil, preferredStyle: .actionSheet)
 
-        let selectedIndex = options.firstIndex { $0.1 == selectedRepeatRule } ?? 0
-
-        presentOptionList(
-            title: "重复",
-            optionTitles: options.map { $0.0 },
-            selectedIndex: selectedIndex,
-            customTitle: "自定义…",
-            onSelect: { [weak self] index in
-                guard let self else { return }
-                self.selectedRepeatRule = options[index].1
-                self.updateRepeatDisplay()
-            },
-            onCustomAction: { [weak self] in
-                self?.presentCustomRepeatPlaceholder()
+        options.forEach { option in
+            var title = option.0
+            if option.1 == selectedRepeatRule {
+                title = "✓ " + title
             }
-        )
+            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
+                guard let self else { return }
+                self.selectedRepeatRule = option.1
+                self.updateRepeatDisplay()
+            }
+            alert.addAction(action)
+        }
+
+        alert.addAction(UIAlertAction(title: "自定义…", style: .default) { [weak self] _ in
+            self?.presentCustomRepeatPlaceholder()
+        })
+
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = repeatRow
+            popover.sourceRect = repeatRow.bounds
+        }
+
+        present(alert, animated: true)
     }
 
     @objc private func reminderTapped() {
         view.endEditing(true)
         dismissPickers()
 
-        let selectedIndex = reminderOptions.firstIndex(of: selectedReminder) ?? 0
+        let alert = UIAlertController(title: "提醒", message: nil, preferredStyle: .actionSheet)
 
-        presentOptionList(
-            title: "提醒",
-            optionTitles: reminderOptions.map { $0.title },
-            selectedIndex: selectedIndex,
-            customTitle: nil,
-            onSelect: { [weak self] index in
+        reminderOptions.forEach { option in
+            var title = option.title
+            if option == selectedReminder {
+                title = "✓ " + title
+            }
+            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
                 guard let self else { return }
-                self.selectedReminder = self.reminderOptions[index]
+                self.selectedReminder = option
                 self.updateReminderDisplay()
-            },
-            onCustomAction: nil
-        )
+            }
+            alert.addAction(action)
+        }
+
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = reminderRow
+            popover.sourceRect = reminderRow.bounds
+        }
+
+        present(alert, animated: true)
     }
 
     @objc private func datePickerChanged(_ picker: UIDatePicker) {
@@ -788,127 +807,15 @@ final class AddEventViewController: UIViewController {
         present(alert, animated: true)
     }
 
-    private func presentOptionList(
-        title: String,
-        optionTitles: [String],
-        selectedIndex: Int?,
-        customTitle: String?,
-        onSelect: @escaping (Int) -> Void,
-        onCustomAction: (() -> Void)?
-    ) {
-        let controller = OptionListViewController(
-            title: title,
-            options: optionTitles,
-            selectedIndex: selectedIndex,
-            customTitle: customTitle,
-            onSelect: onSelect,
-            onCustomAction: onCustomAction
+    private func presentCustomRepeatPlaceholder() {
+        let alert = UIAlertController(
+            title: "自定义重复",
+            message: "自定义重复设置开发中，暂未提供详细界面。",
+            preferredStyle: .alert
         )
-
-        let nav = UINavigationController(rootViewController: controller)
-        nav.modalPresentationStyle = .pageSheet
-
-        if let sheet = nav.sheetPresentationController {
-            sheet.detents = [.medium(), .large()]
-            sheet.prefersGrabberVisible = true
-        }
-
-        present(nav, animated: true)
+        alert.addAction(UIAlertAction(title: "知道了", style: .default))
+        present(alert, animated: true)
     }
-
-private func presentCustomRepeatPlaceholder() {
-    let alert = UIAlertController(
-        title: "自定义重复",
-        message: "自定义重复设置开发中，暂未提供详细界面。",
-        preferredStyle: .alert
-    )
-    alert.addAction(UIAlertAction(title: "知道了", style: .default))
-    present(alert, animated: true)
-}
-
-// MARK: - Option List Sheet
-
-private final class OptionListViewController: UITableViewController {
-    private let options: [String]
-    private var selectedIndex: Int?
-    private let customTitle: String?
-    private let onSelect: (Int) -> Void
-    private let onCustomAction: (() -> Void)?
-
-    init(
-        title: String,
-        options: [String],
-        selectedIndex: Int?,
-        customTitle: String?,
-        onSelect: @escaping (Int) -> Void,
-        onCustomAction: (() -> Void)?
-    ) {
-        self.options = options
-        self.selectedIndex = selectedIndex
-        self.customTitle = customTitle
-        self.onSelect = onSelect
-        self.onCustomAction = onCustomAction
-        super.init(style: .insetGrouped)
-        self.title = title
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "OptionCell")
-        tableView.rowHeight = 48
-        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "取消", style: .plain, target: self, action: #selector(closeTapped))
-    }
-
-    @objc private func closeTapped() {
-        dismiss(animated: true)
-    }
-
-    override func numberOfSections(in tableView: UITableView) -> Int {
-        customTitle == nil ? 1 : 2
-    }
-
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        if section == 0 {
-            return options.count
-        }
-        return customTitle == nil ? 0 : 1
-    }
-
-    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "OptionCell", for: indexPath)
-        cell.selectionStyle = .default
-
-        if indexPath.section == 0 {
-            cell.textLabel?.text = options[indexPath.row]
-            cell.textLabel?.textColor = .label
-            cell.accessoryType = indexPath.row == selectedIndex ? .checkmark : .none
-        } else {
-            cell.textLabel?.text = customTitle
-            cell.textLabel?.textColor = view.tintColor
-            cell.accessoryType = .none
-        }
-
-        return cell
-    }
-
-    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-
-        if indexPath.section == 0 {
-            selectedIndex = indexPath.row
-            onSelect(indexPath.row)
-            dismiss(animated: true)
-        } else {
-            dismiss(animated: true) { [weak self] in
-                self?.onCustomAction?()
-            }
-        }
-    }
-}
 }
 
 // MARK: - UITextFieldDelegate & UITextViewDelegate
@@ -1022,6 +929,7 @@ private final class OptionRowView: UIControl {
         stack.axis = .horizontal
         stack.alignment = .center
         stack.spacing = 16
+        stack.isUserInteractionEnabled = false
 
         addSubview(stack)
         stack.snp.makeConstraints { make in
