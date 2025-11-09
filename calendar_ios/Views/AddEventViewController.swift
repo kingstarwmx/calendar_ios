@@ -1,6 +1,6 @@
 import UIKit
 import SnapKit
-
+let iconSize: CGFloat = 23
 /// 新建事件页面，参考 Flutter 端 `add_event_screen.dart` 的布局和交互
 final class AddEventViewController: UIViewController {
     var onSave: ((Event) -> Void)?
@@ -32,9 +32,10 @@ final class AddEventViewController: UIViewController {
 
     // MARK: - UI Components
 
-    private let scrollView = UIScrollView()
+    private let scrollView = FormScrollView()
     private let contentView = UIView()
     private let stackView = UIStackView()
+    private let formStack = UIStackView()
 
     private let titleField = UITextField()
 
@@ -52,10 +53,12 @@ final class AddEventViewController: UIViewController {
     private var startPickerHeightConstraint: Constraint?
     private var endPickerHeightConstraint: Constraint?
     private let pickerHeight: CGFloat = 216
+    private let timeRowHeight: CGFloat = 84
+    private var timeRowHeightConstraint: Constraint?
     private let startDatePicker = UIDatePicker()
     private let endDatePicker = UIDatePicker()
 
-    private let repeatRow = OptionRowView(iconName: "arrow.triangle.2.circlepath", placeholder: "无重复")
+    private let repeatRow = OptionRowView(iconName: "repeat", placeholder: "无重复")
     private let reminderRow = OptionRowView(iconName: "bell", placeholder: "30分钟前")
     private let locationRow = IconTextFieldRow(iconName: "mappin.and.ellipse", placeholder: "位置")
     private let urlRow = IconTextFieldRow(iconName: "link", placeholder: "URL")
@@ -163,7 +166,7 @@ final class AddEventViewController: UIViewController {
         stackView.axis = .vertical
         stackView.spacing = 20
         stackView.isLayoutMarginsRelativeArrangement = true
-        stackView.layoutMargins = UIEdgeInsets(top: 24, left: 20, bottom: 40, right: 20)
+        stackView.layoutMargins = UIEdgeInsets(top: 24, left: 0, bottom: 40, right: 0)
 
         view.addSubview(scrollView)
         scrollView.addSubview(contentView)
@@ -183,6 +186,7 @@ final class AddEventViewController: UIViewController {
         }
 
         configureTitleField()
+        configureFormStack()
         configureTimeSection()
         configureOptionRows()
     }
@@ -199,7 +203,7 @@ final class AddEventViewController: UIViewController {
         let titleContainer = UIView()
         titleContainer.addSubview(titleField)
         titleField.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20))
         }
 
         stackView.addArrangedSubview(titleContainer)
@@ -212,14 +216,23 @@ final class AddEventViewController: UIViewController {
         stackView.addArrangedSubview(divider)
     }
 
+    private func configureFormStack() {
+        formStack.axis = .vertical
+        formStack.spacing = 0
+        formStack.distribution = .fill
+        formStack.alignment = .fill
+        formStack.isLayoutMarginsRelativeArrangement = false
+        stackView.addArrangedSubview(formStack)
+    }
+
     private func configureTimeSection() {
         startDateButton.addTarget(self, action: #selector(startButtonTapped), for: .touchUpInside)
         endDateButton.addTarget(self, action: #selector(endButtonTapped), for: .touchUpInside)
 
-        clockIconView.tintColor = .secondaryLabel
+        clockIconView.tintColor = .gray
         clockIconView.contentMode = .scaleAspectFit
 
-        arrowView.tintColor = .secondaryLabel
+        arrowView.tintColor = .gray
         arrowView.contentMode = .scaleAspectFit
 
         allDayButton.setTitle("全天", for: .normal)
@@ -235,14 +248,13 @@ final class AddEventViewController: UIViewController {
 
         timeRow.addArrangedSubview(clockIconView)
         clockIconView.snp.makeConstraints { make in
-            make.width.height.equalTo(20)
+            make.width.height.equalTo(iconSize)
         }
 
         timeRow.addArrangedSubview(startDateButton)
         timeRow.addArrangedSubview(arrowView)
         arrowView.snp.makeConstraints { make in
-            make.width.equalTo(18)
-            make.height.equalTo(18)
+            make.width.height.equalTo(iconSize)
         }
         timeRow.addArrangedSubview(endDateButton)
         timeRow.addArrangedSubview(allDayButton)
@@ -261,6 +273,7 @@ final class AddEventViewController: UIViewController {
         timeSection.addSubview(timeRow)
         timeRow.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview()
+            timeRowHeightConstraint = make.height.equalTo(timeRowHeight).constraint
         }
 
         pickerStack.axis = .vertical
@@ -279,7 +292,7 @@ final class AddEventViewController: UIViewController {
         configurePickerContainer(container: startPickerContainer, picker: startDatePicker)
         configurePickerContainer(container: endPickerContainer, picker: endDatePicker)
 
-        stackView.addArrangedSubview(timeSection)
+        addFormRow(timeSection)
     }
 
     private func configurePickerContainer(container: UIView, picker: UIDatePicker) {
@@ -314,30 +327,41 @@ final class AddEventViewController: UIViewController {
     }
 
     private func configureOptionRows() {
+        if #available(iOS 14.0, *) {
+            repeatRow.menuProvider = { [weak self] in
+                self?.makeRepeatMenu() ?? UIMenu(title: "", children: [])
+            }
+        } else {
+            repeatRow.menuProvider = nil
+        }
         repeatRow.addTarget(self, action: #selector(repeatTapped), for: .touchUpInside)
-        reminderRow.addTarget(self, action: #selector(reminderTapped), for: .touchUpInside)
+//        reminderRow.addTarget(self, action: #selector(reminderTapped), for: .touchUpInside)
+        
 
-        stackView.addArrangedSubview(repeatRow)
-        stackView.addArrangedSubview(reminderRow)
+        repeatRow.accessoryImage = UIImage(systemName: "chevron.up.chevron.down")
 
-        stackView.addArrangedSubview(locationRow)
-        stackView.addArrangedSubview(urlRow)
-        stackView.addArrangedSubview(notesRow)
+        addFormRow(repeatRow, horizontalInset: 0)
+        addFormRow(reminderRow, horizontalInset: 0)
 
+        addFormRow(locationRow)
+        addFormRow(urlRow)
+        addFormRow(notesRow, includeBottomSeparator: true)
+
+        let rowHeight: CGFloat = 60
         repeatRow.snp.makeConstraints { make in
-            make.height.equalTo(44)
+            make.height.equalTo(rowHeight)
         }
 
         reminderRow.snp.makeConstraints { make in
-            make.height.equalTo(44)
+            make.height.equalTo(rowHeight)
         }
 
         locationRow.snp.makeConstraints { make in
-            make.height.equalTo(44)
+            make.height.equalTo(rowHeight)
         }
 
         urlRow.snp.makeConstraints { make in
-            make.height.equalTo(44)
+            make.height.equalTo(rowHeight)
         }
 
         notesRow.snp.makeConstraints { make in
@@ -347,6 +371,21 @@ final class AddEventViewController: UIViewController {
         locationRow.textField.delegate = self
         urlRow.textField.delegate = self
         notesRow.textView.delegate = self
+    }
+
+    private func addFormRow(
+        _ row: UIView,
+        includeTopSeparator: Bool = false,
+        includeBottomSeparator: Bool = true,
+        horizontalInset: CGFloat = 20
+    ) {
+        let container = FormRowContainer(
+            content: row,
+            showTopSeparator: includeTopSeparator,
+            showBottomSeparator: includeBottomSeparator,
+            horizontalInset: horizontalInset
+        )
+        formStack.addArrangedSubview(container)
     }
 
     private func configurePickers() {
@@ -436,42 +475,11 @@ final class AddEventViewController: UIViewController {
     @objc private func repeatTapped() {
         view.endEditing(true)
         dismissPickers()
-
-        let options: [(String, RepeatRule)] = [
-            ("不重复", .none()),
-            ("每天", RepeatRule(frequency: .daily)),
-            ("每周", RepeatRule(frequency: .weekly)),
-            ("每两周", RepeatRule(frequency: .weekly, interval: 2)),
-            ("每月", RepeatRule(frequency: .monthly)),
-            ("每年", RepeatRule(frequency: .yearly))
-        ]
-        let alert = UIAlertController(title: "重复", message: nil, preferredStyle: .actionSheet)
-
-        options.forEach { option in
-            var title = option.0
-            if option.1 == selectedRepeatRule {
-                title = "✓ " + title
-            }
-            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
-                guard let self else { return }
-                self.selectedRepeatRule = option.1
-                self.updateRepeatDisplay()
-            }
-            alert.addAction(action)
+        if #available(iOS 14.0, *) {
+            repeatRow.showMenu()
+        } else {
+            presentLegacyRepeatSheet()
         }
-
-        alert.addAction(UIAlertAction(title: "自定义…", style: .default) { [weak self] _ in
-            self?.presentCustomRepeatPlaceholder()
-        })
-
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-
-        if let popover = alert.popoverPresentationController {
-            popover.sourceView = repeatRow
-            popover.sourceRect = repeatRow.bounds
-        }
-
-        present(alert, animated: true)
     }
 
     @objc private func reminderTapped() {
@@ -498,6 +506,77 @@ final class AddEventViewController: UIViewController {
         if let popover = alert.popoverPresentationController {
             popover.sourceView = reminderRow
             popover.sourceRect = reminderRow.bounds
+        }
+
+        present(alert, animated: true)
+    }
+
+    @available(iOS 14.0, *)
+    private func makeRepeatMenu() -> UIMenu {
+        let options: [(String, RepeatRule)] = [
+            ("不重复", .none()),
+            ("每天", RepeatRule(frequency: .daily)),
+            ("每周", RepeatRule(frequency: .weekly)),
+            ("每两周", RepeatRule(frequency: .weekly, interval: 2)),
+            ("每月", RepeatRule(frequency: .monthly)),
+            ("每年", RepeatRule(frequency: .yearly))
+        ]
+
+        let actions = options.map { option -> UIAction in
+            let title = option.0
+            let rule = option.1
+            let action = UIAction(title: title, image: nil, identifier: nil) { [weak self] _ in
+                guard let self else { return }
+                self.selectedRepeatRule = rule
+                self.updateRepeatDisplay()
+            }
+            if #available(iOS 15.0, *) {
+                action.state = rule == selectedRepeatRule ? .on : .off
+            }
+            return action
+        }
+
+        let customAction = UIAction(title: "自定义…", image: nil, identifier: nil) { [weak self] _ in
+            self?.presentCustomRepeatPlaceholder()
+        }
+
+        var children: [UIMenuElement] = actions
+        children.append(UIMenu(options: .displayInline, children: [customAction]))
+        return UIMenu(title: "", children: children)
+    }
+
+    private func presentLegacyRepeatSheet() {
+        let options: [(String, RepeatRule)] = [
+            ("不重复", .none()),
+            ("每天", RepeatRule(frequency: .daily)),
+            ("每周", RepeatRule(frequency: .weekly)),
+            ("每两周", RepeatRule(frequency: .weekly, interval: 2)),
+            ("每月", RepeatRule(frequency: .monthly)),
+            ("每年", RepeatRule(frequency: .yearly))
+        ]
+
+        let alert = UIAlertController(title: "重复", message: nil, preferredStyle: .actionSheet)
+        options.forEach { option in
+            var title = option.0
+            if option.1 == selectedRepeatRule {
+                title = "✓ " + title
+            }
+            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
+                guard let self else { return }
+                self.selectedRepeatRule = option.1
+                self.updateRepeatDisplay()
+            }
+            alert.addAction(action)
+        }
+
+        alert.addAction(UIAlertAction(title: "自定义…", style: .default) { [weak self] _ in
+            self?.presentCustomRepeatPlaceholder()
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = repeatRow
+            popover.sourceRect = repeatRow.bounds
         }
 
         present(alert, animated: true)
@@ -735,6 +814,7 @@ final class AddEventViewController: UIViewController {
 
     private func updateRepeatDisplay() {
         repeatRow.value = shortDescription(for: selectedRepeatRule)
+        repeatRow.refreshMenu()
     }
 
     private func updateReminderDisplay() {
@@ -840,6 +920,7 @@ extension AddEventViewController: UITextFieldDelegate, UITextViewDelegate {
     }
 }
 
+
 // MARK: - Custom UI Components
 
 private final class DateSelectionButton: UIControl {
@@ -910,14 +991,38 @@ private final class DateSelectionButton: UIControl {
 private final class OptionRowView: UIControl {
     private let iconView = UIImageView()
     private let valueLabel = UILabel()
+    private let spacer = UIView()
+    private let accessoryImageView = UIImageView()
+    private let menuButton: UIButton
+    private var storedMenuProvider: (() -> UIMenu)?
 
     var value: String {
         get { valueLabel.text ?? "" }
         set { valueLabel.text = newValue }
     }
 
+    var accessoryImage: UIImage? {
+        didSet {
+            accessoryImageView.image = accessoryImage
+            accessoryImageView.isHidden = accessoryImage == nil
+        }
+    }
+
+    var menuProvider: (() -> UIMenu)? {
+        didSet {
+            storedMenuProvider = menuProvider
+            configureMenu()
+        }
+    }
+
     init(iconName: String, placeholder: String) {
+        if #available(iOS 14.0, *) {
+            menuButton = MenuAnchorButton(type: .system)
+        } else {
+            menuButton = UIButton(type: .system)
+        }
         super.init(frame: .zero)
+
         iconView.image = UIImage(systemName: iconName)
         iconView.tintColor = .secondaryLabel
 
@@ -925,7 +1030,16 @@ private final class OptionRowView: UIControl {
         valueLabel.font = UIFont.systemFont(ofSize: 16)
         valueLabel.textColor = UIColor.label
 
-        let stack = UIStackView(arrangedSubviews: [iconView, valueLabel])
+        accessoryImageView.tintColor = .gray
+        accessoryImageView.isHidden = true
+        accessoryImageView.contentMode = .scaleAspectFit
+        accessoryImageView.isUserInteractionEnabled = false
+        
+        
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let stack = UIStackView(arrangedSubviews: [iconView, valueLabel, spacer, accessoryImageView])
         stack.axis = .horizontal
         stack.alignment = .center
         stack.spacing = 16
@@ -933,12 +1047,39 @@ private final class OptionRowView: UIControl {
 
         addSubview(stack)
         stack.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20))
         }
 
         iconView.snp.makeConstraints { make in
-            make.width.height.equalTo(20)
+            make.width.height.equalTo(iconSize)
         }
+
+        accessoryImageView.snp.makeConstraints { make in
+            make.width.equalTo(21)
+            make.height.equalTo(21)
+        }
+
+        menuButton.setTitle(nil, for: .normal)
+        menuButton.tintColor = .clear
+        menuButton.backgroundColor = .clear
+        menuButton.isHidden = true
+        menuButton.isUserInteractionEnabled = true
+        addSubview(menuButton)
+        menuButton.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+
+        if #available(iOS 14.0, *), let anchorButton = menuButton as? MenuAnchorButton {
+            anchorButton.anchorPointProvider = { [weak self] in
+                guard let self else { return CGPoint.zero }
+                let localCenter = CGPoint(x: self.accessoryImageView.bounds.midX, y: self.accessoryImageView.bounds.midY)
+                return self.accessoryImageView.convert(localCenter, to: anchorButton)
+            }
+        }
+
+        menuButton.addTarget(self, action: #selector(forwardTouchDown), for: .touchDown)
+        menuButton.addTarget(self, action: #selector(forwardTouchUpInside), for: .touchUpInside)
+        menuButton.addTarget(self, action: #selector(forwardTouchCancel), for: [.touchCancel, .touchDragExit, .touchUpOutside])
     }
 
     required init?(coder: NSCoder) {
@@ -947,6 +1088,124 @@ private final class OptionRowView: UIControl {
 
     override var isHighlighted: Bool {
         didSet { backgroundColor = isHighlighted ? UIColor.systemGray5 : UIColor.clear }
+    }
+
+    func showMenu() {
+        guard #available(iOS 14.0, *) else { return }
+        configureMenu()
+        menuButton.sendActions(for: .touchDown)
+        menuButton.sendActions(for: .touchUpInside)
+    }
+
+    func refreshMenu() {
+        configureMenu()
+    }
+
+    private func configureMenu() {
+        guard let provider = storedMenuProvider else {
+            menuButton.menu = nil
+            menuButton.isHidden = true
+            return
+        }
+
+        guard #available(iOS 14.0, *) else {
+            menuButton.menu = nil
+            menuButton.isHidden = true
+            return
+        }
+
+        menuButton.isHidden = false
+        menuButton.menu = provider()
+        menuButton.showsMenuAsPrimaryAction = true
+    }
+
+    @objc private func forwardTouchDown() {
+        isHighlighted = true
+        sendActions(for: .touchDown)
+    }
+
+    @objc private func forwardTouchUpInside() {
+        isHighlighted = false
+        sendActions(for: .touchUpInside)
+    }
+
+    @objc private func forwardTouchCancel() {
+        isHighlighted = false
+        sendActions(for: .touchCancel)
+    }
+
+}
+
+private final class FormScrollView: UIScrollView {
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        commonInit()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        commonInit()
+    }
+
+    private func commonInit() {
+        delaysContentTouches = false
+    }
+
+    override func touchesShouldCancel(in view: UIView) -> Bool {
+        if view is UIControl {
+            return true
+        }
+        return super.touchesShouldCancel(in: view)
+    }
+}
+
+
+
+@available(iOS 14.0, *)
+private final class MenuAnchorButton: UIButton {
+    var anchorPointProvider: (() -> CGPoint)?
+
+    override func menuAttachmentPoint(for configuration: UIContextMenuConfiguration) -> CGPoint {
+        anchorPointProvider?() ?? super.menuAttachmentPoint(for: configuration)
+    }
+}
+
+private final class FormRowContainer: UIView {
+    private let topSeparator = UIView()
+    private let bottomSeparator = UIView()
+
+    init(content: UIView, showTopSeparator: Bool, showBottomSeparator: Bool, horizontalInset: CGFloat) {
+        super.init(frame: .zero)
+        topSeparator.backgroundColor = UIColor.separator
+        bottomSeparator.backgroundColor = UIColor.separator
+
+        addSubview(topSeparator)
+        addSubview(bottomSeparator)
+        addSubview(content)
+
+        let scale = UIScreen.main.scale
+
+        topSeparator.snp.makeConstraints { make in
+            make.leading.trailing.equalToSuperview()
+            make.top.equalToSuperview()
+            make.height.equalTo(showTopSeparator ? 1.0 / scale : 0)
+        }
+
+        bottomSeparator.snp.makeConstraints { make in
+            make.leading.trailing.equalToSuperview()
+            make.bottom.equalToSuperview()
+            make.height.equalTo(showBottomSeparator ? 1.0 / scale : 0)
+        }
+
+        content.snp.makeConstraints { make in
+            make.leading.trailing.equalToSuperview().inset(horizontalInset)
+            make.top.equalTo(topSeparator.snp.bottom)
+            make.bottom.equalTo(bottomSeparator.snp.top)
+        }
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }
 
@@ -976,7 +1235,7 @@ private final class IconTextFieldRow: UIView {
         }
 
         iconView.snp.makeConstraints { make in
-            make.width.height.equalTo(20)
+            make.width.height.equalTo(iconSize)
         }
     }
 
