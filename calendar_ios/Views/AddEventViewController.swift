@@ -4,11 +4,27 @@ let iconSize: CGFloat = 23
 /// 新建事件页面，参考 Flutter 端 `add_event_screen.dart` 的布局和交互
 final class AddEventViewController: UIViewController {
     var onSave: ((Event) -> Void)?
+    var creationDate: Date = Date() {
+        didSet {
+            guard isViewLoaded else { return }
+            recurrenceSelectedDate = creationDate
+            configureRecurrenceCalendar()
+            if recurrenceMode == .specificDate {
+                updateRecurrenceRowContent()
+            }
+        }
+    }
 
     private enum ActivePicker {
         case none
         case start
         case end
+    }
+
+    private enum RecurrenceEndMode: Equatable {
+        case infinite
+        case specificDate
+        case limitedCount
     }
 
     private struct ReminderOption: Equatable {
@@ -58,7 +74,10 @@ final class AddEventViewController: UIViewController {
     private let startDatePicker = UIDatePicker()
     private let endDatePicker = UIDatePicker()
 
+    private let repeatGroupStack = UIStackView()
     private let repeatRow = OptionRowView(iconName: "repeat", placeholder: "无重复")
+    private let recurrenceRow = RecurrenceRowView()
+    private let recurrenceCalendarRow = RecurrenceCalendarRow()
     private let reminderRow = OptionRowView(iconName: "bell", placeholder: "30分钟前")
     private let locationRow = IconTextFieldRow(iconName: "mappin.and.ellipse", placeholder: "位置")
     private let urlRow = IconTextFieldRow(iconName: "link", placeholder: "URL")
@@ -73,7 +92,12 @@ final class AddEventViewController: UIViewController {
     private var cachedTimedStartDate: Date?
     private var cachedTimedEndDate: Date?
     private var selectedRepeatRule = RepeatRule.none()
+    private var recurrenceMode: RecurrenceEndMode = .infinite
+    private var recurrenceSelectedDate: Date?
+    private var recurrenceLimitedCount: Int?
+    private var isRecurrenceLabelSelected = false
     private var selectedReminder = ReminderOption(title: "", offset: 30 * 60)
+    private var calendarSelection: UICalendarSelectionSingleDate?
 
     private let baseLanguageIdentifier: String = Locale.preferredLanguages.first ?? Locale.autoupdatingCurrent.identifier
 
@@ -112,6 +136,21 @@ final class AddEventViewController: UIViewController {
         return formatter
     }()
 
+    private lazy var fullWeekdayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = displayLocale
+        let format = DateFormatter.dateFormat(fromTemplate: "EEEE", options: 0, locale: displayLocale) ?? "EEEE"
+        formatter.dateFormat = format
+        return formatter
+    }()
+
+    private lazy var yearFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = displayLocale
+        formatter.dateFormat = "yyyy"
+        return formatter
+    }()
+
     private lazy var timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = pickerLocale
@@ -136,6 +175,8 @@ final class AddEventViewController: UIViewController {
         configureViewHierarchy()
         configurePickers()
         configureActions()
+        recurrenceSelectedDate = creationDate
+        configureRecurrenceCalendar()
         if let defaultReminder = reminderOptions.first(where: { $0.offset == 30 * 60 }) {
             selectedReminder = defaultReminder
         } else if let first = reminderOptions.first {
@@ -335,12 +376,36 @@ final class AddEventViewController: UIViewController {
             repeatRow.menuProvider = nil
         }
         repeatRow.addTarget(self, action: #selector(repeatTapped), for: .touchUpInside)
-//        reminderRow.addTarget(self, action: #selector(reminderTapped), for: .touchUpInside)
-        
 
         repeatRow.accessoryImage = UIImage(systemName: "chevron.up.chevron.down")
 
-        addFormRow(repeatRow, horizontalInset: 0)
+        if #available(iOS 14.0, *) {
+            recurrenceRow.menuProvider = { [weak self] in
+                self?.makeRecurrenceMenu() ?? UIMenu(title: "", children: [])
+            }
+        }
+        recurrenceRow.onLabelTapped = { [weak self] in
+            self?.recurrenceLabelTapped()
+        }
+        recurrenceRow.addTarget(self, action: #selector(recurrenceRowTapped), for: .touchUpInside)
+        recurrenceRow.accessoryImage = UIImage(systemName: "chevron.up.chevron.down")
+        recurrenceRow.isHidden = true
+        recurrenceRow.updateLabel(text: "无限重复")
+
+        if #available(iOS 16.0, *) {
+            calendarSelection = UICalendarSelectionSingleDate(delegate: self)
+            recurrenceCalendarRow.calendarView.selectionBehavior = calendarSelection
+        }
+        recurrenceCalendarRow.isHidden = true
+
+        repeatGroupStack.axis = .vertical
+        repeatGroupStack.alignment = .fill
+        repeatGroupStack.spacing = 0
+        repeatGroupStack.addArrangedSubview(repeatRow)
+        repeatGroupStack.addArrangedSubview(recurrenceRow)
+        repeatGroupStack.addArrangedSubview(recurrenceCalendarRow)
+
+        addFormRow(repeatGroupStack, horizontalInset: 0)
         addFormRow(reminderRow, horizontalInset: 0)
 
         addFormRow(locationRow)
@@ -352,8 +417,16 @@ final class AddEventViewController: UIViewController {
             make.height.equalTo(rowHeight)
         }
 
+        recurrenceRow.snp.makeConstraints { make in
+            make.height.equalTo(rowHeight)
+        }
+
         reminderRow.snp.makeConstraints { make in
             make.height.equalTo(rowHeight)
+        }
+
+        recurrenceCalendarRow.snp.makeConstraints { make in
+            make.height.greaterThanOrEqualTo(320)
         }
 
         locationRow.snp.makeConstraints { make in
@@ -368,9 +441,26 @@ final class AddEventViewController: UIViewController {
             make.height.greaterThanOrEqualTo(120)
         }
 
+        recurrenceRow.countTextField.delegate = self
+        recurrenceRow.countTextField.addTarget(self, action: #selector(limitCountEditingChanged(_:)), for: .editingChanged)
+
         locationRow.textField.delegate = self
         urlRow.textField.delegate = self
         notesRow.textView.delegate = self
+    }
+
+    private func configureRecurrenceCalendar() {
+        guard #available(iOS 16.0, *), let calendarSelection else { return }
+        let calendarView = recurrenceCalendarRow.calendarView
+        calendarView.locale = pickerLocale
+        calendarView.calendar = timeCalendar
+        let start = timeCalendar.startOfDay(for: creationDate)
+        calendarView.availableDateRange = DateInterval(start: start, end: Date.distantFuture)
+
+        let targetDate = recurrenceSelectedDate ?? creationDate
+        let components = timeCalendar.dateComponents([.year, .month, .day], from: targetDate)
+        calendarView.visibleDateComponents = components
+        calendarSelection.setSelected(components, animated: false)
     }
 
     private func addFormRow(
@@ -455,8 +545,8 @@ final class AddEventViewController: UIViewController {
     }
 
     @objc private func backgroundTapped(_ gesture: UITapGestureRecognizer) {
-//        view.endEditing(true)
-//        dismissPickers()
+        view.endEditing(true)
+        dismissPickers()
     }
 
     @objc private func startButtonTapped() {
@@ -480,6 +570,36 @@ final class AddEventViewController: UIViewController {
         } else {
             presentLegacyRepeatSheet()
         }
+    }
+
+    @objc private func recurrenceRowTapped() {
+        view.endEditing(true)
+        dismissPickers()
+        guard !recurrenceRow.isHidden else { return }
+        if #available(iOS 14.0, *) {
+            recurrenceRow.showMenu()
+        } else {
+            presentLegacyRecurrenceSheet()
+        }
+    }
+
+    @objc private func recurrenceLabelTapped() {
+        guard !recurrenceRow.isHidden else { return }
+        isRecurrenceLabelSelected.toggle()
+        if recurrenceMode == .limitedCount && !isRecurrenceLabelSelected {
+            view.endEditing(true)
+        }
+        updateRecurrenceRowContent()
+    }
+
+    @objc private func limitCountEditingChanged(_ textField: UITextField) {
+        guard textField === recurrenceRow.countTextField else { return }
+        if let text = textField.text, let value = Int(text), value > 0 {
+            recurrenceLimitedCount = value
+        } else {
+            recurrenceLimitedCount = nil
+        }
+        recurrenceRow.updateLabel(text: limitedCountDisplayText())
     }
 
     @objc private func reminderTapped() {
@@ -506,6 +626,52 @@ final class AddEventViewController: UIViewController {
         if let popover = alert.popoverPresentationController {
             popover.sourceView = reminderRow
             popover.sourceRect = reminderRow.bounds
+        }
+
+        present(alert, animated: true)
+    }
+
+    @available(iOS 14.0, *)
+    private func makeRecurrenceMenu() -> UIMenu {
+        let options: [(String, RecurrenceEndMode)] = [
+            ("无限重复", .infinite),
+            ("特定日期", .specificDate),
+            ("限定次数", .limitedCount)
+        ]
+
+        let actions = options.map { option -> UIAction in
+            let title = option.0
+            let mode = option.1
+            let action = UIAction(title: title, image: nil, identifier: nil) { [weak self] _ in
+                self?.handleRecurrenceOptionSelection(mode)
+            }
+            if #available(iOS 15.0, *) {
+                action.state = mode == recurrenceMode ? .on : .off
+            }
+            return action
+        }
+        return UIMenu(title: "", children: actions)
+    }
+
+    private func presentLegacyRecurrenceSheet() {
+        let options: [(String, RecurrenceEndMode)] = [
+            ("无限重复", .infinite),
+            ("特定日期", .specificDate),
+            ("限定次数", .limitedCount)
+        ]
+
+        let alert = UIAlertController(title: "重复范围", message: nil, preferredStyle: .actionSheet)
+        options.forEach { option in
+            let action = UIAlertAction(title: option.0, style: .default) { [weak self] _ in
+                self?.handleRecurrenceOptionSelection(option.1)
+            }
+            alert.addAction(action)
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = recurrenceRow
+            popover.sourceRect = recurrenceRow.bounds
         }
 
         present(alert, animated: true)
@@ -815,10 +981,109 @@ final class AddEventViewController: UIViewController {
     private func updateRepeatDisplay() {
         repeatRow.value = shortDescription(for: selectedRepeatRule)
         repeatRow.refreshMenu()
+        updateRecurrenceAvailability()
     }
 
     private func updateReminderDisplay() {
         reminderRow.value = selectedReminder.title
+    }
+
+    private func updateRecurrenceAvailability() {
+        let shouldShow = !selectedRepeatRule.isNone
+        let wasHidden = recurrenceRow.isHidden
+        recurrenceRow.isHidden = !shouldShow
+        recurrenceRow.isUserInteractionEnabled = shouldShow
+
+        if shouldShow {
+            if wasHidden {
+                recurrenceMode = .infinite
+                recurrenceLimitedCount = nil
+                isRecurrenceLabelSelected = false
+                recurrenceRow.endCountEditing()
+            }
+            recurrenceCalendarRow.isHidden = recurrenceMode != .specificDate
+            updateRecurrenceRowContent()
+        } else {
+            recurrenceCalendarRow.isHidden = true
+            recurrenceMode = .infinite
+            recurrenceLimitedCount = nil
+            isRecurrenceLabelSelected = false
+            recurrenceRow.endCountEditing()
+        }
+    }
+
+    private func handleRecurrenceOptionSelection(_ mode: RecurrenceEndMode) {
+        guard !recurrenceRow.isHidden else { return }
+        recurrenceMode = mode
+        switch mode {
+        case .infinite:
+            isRecurrenceLabelSelected = false
+            recurrenceLimitedCount = nil
+        case .specificDate:
+            recurrenceSelectedDate = recurrenceSelectedDate ?? creationDate
+            isRecurrenceLabelSelected = true
+        case .limitedCount:
+            isRecurrenceLabelSelected = true
+        }
+        updateRecurrenceRowContent()
+    }
+
+    private func updateRecurrenceRowContent() {
+        guard !recurrenceRow.isHidden else { return }
+        switch recurrenceMode {
+        case .infinite:
+            recurrenceRow.updateLabel(text: "无限重复")
+            recurrenceRow.isLabelSelected = isRecurrenceLabelSelected
+            recurrenceRow.endCountEditing()
+            recurrenceCalendarRow.isHidden = true
+        case .specificDate:
+            let date = recurrenceSelectedDate ?? creationDate
+            recurrenceRow.updateLabel(text: recurrenceDisplayString(from: date))
+            recurrenceRow.isLabelSelected = isRecurrenceLabelSelected
+            recurrenceRow.endCountEditing()
+            recurrenceCalendarRow.isHidden = false
+            selectCalendarDate(date, animated: false)
+        case .limitedCount:
+            recurrenceRow.updateLabel(text: limitedCountDisplayText())
+            recurrenceRow.isLabelSelected = isRecurrenceLabelSelected
+            if isRecurrenceLabelSelected {
+                recurrenceRow.beginCountEditing(with: recurrenceLimitedCount)
+            } else {
+                recurrenceRow.endCountEditing()
+            }
+            recurrenceCalendarRow.isHidden = true
+        }
+    }
+
+    private func selectCalendarDate(_ date: Date, animated: Bool) {
+        guard #available(iOS 16.0, *), let calendarSelection else { return }
+        let components = timeCalendar.dateComponents([.year, .month, .day], from: date)
+        calendarSelection.setSelected(components, animated: animated)
+        recurrenceCalendarRow.calendarView.visibleDateComponents = components
+    }
+
+    private func recurrenceDisplayString(from date: Date) -> String {
+        let monthDay = monthDayFormatter.string(from: date)
+        let weekday = fullWeekdayFormatter.string(from: date)
+        let calendar = Calendar.autoupdatingCurrent
+        let targetYear = calendar.component(.year, from: date)
+        let currentYear = calendar.component(.year, from: Date())
+        if targetYear == currentYear {
+            return "\(monthDay) \(weekday)"
+        }
+        let yearString = yearFormatter.string(from: date)
+        if let languageCode = displayLocale.language.languageCode?.identifier, languageCode.hasPrefix("zh") {
+            return "\(yearString)年 \(monthDay) \(weekday)"
+        } else {
+            return "\(monthDay) \(weekday) \(yearString)"
+        }
+    }
+
+    private func limitedCountDisplayText() -> String {
+        if let count = recurrenceLimitedCount, count > 0 {
+            return "\(count)次后结束"
+        }
+        return "_次后结束"
     }
 
     private func recurrenceString(for rule: RepeatRule) -> String? {
@@ -902,12 +1167,36 @@ final class AddEventViewController: UIViewController {
 
 extension AddEventViewController: UITextFieldDelegate, UITextViewDelegate {
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        if textField === recurrenceRow.countTextField {
+            textField.resignFirstResponder()
+            return false
+        }
         textField.resignFirstResponder()
         return true
     }
 
     func textFieldDidBeginEditing(_ textField: UITextField) {
         dismissPickers()
+    }
+
+    func textFieldDidEndEditing(_ textField: UITextField) {
+        if textField === recurrenceRow.countTextField {
+            if let text = textField.text, let value = Int(text), value > 0 {
+                recurrenceLimitedCount = value
+            } else {
+                recurrenceLimitedCount = nil
+            }
+            isRecurrenceLabelSelected = false
+            updateRecurrenceRowContent()
+        }
+    }
+
+    func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+        if textField === recurrenceRow.countTextField {
+            if string.isEmpty { return true }
+            return string.rangeOfCharacter(from: CharacterSet.decimalDigits.inverted) == nil
+        }
+        return true
     }
 
     func textViewDidBeginEditing(_ textView: UITextView) {
@@ -917,6 +1206,25 @@ extension AddEventViewController: UITextFieldDelegate, UITextViewDelegate {
     func textViewDidChange(_ textView: UITextView) {
         guard let placeholderTextView = textView as? PlaceholderTextView else { return }
         placeholderTextView.updatePlaceholderVisibility()
+    }
+}
+
+@available(iOS 16.0, *)
+extension AddEventViewController: UICalendarSelectionSingleDateDelegate {
+    func dateSelection(_ selection: UICalendarSelectionSingleDate, didSelectDate dateComponents: DateComponents?) {
+        guard let dateComponents,
+              let date = timeCalendar.date(from: dateComponents) else { return }
+        recurrenceSelectedDate = date
+        updateRecurrenceRowContent()
+    }
+
+    func dateSelection(_ selection: UICalendarSelectionSingleDate, canSelectDate dateComponents: DateComponents?) -> Bool {
+        guard let dateComponents,
+              let date = timeCalendar.date(from: dateComponents) else { return false }
+        let calendar = timeCalendar
+        let normalizedSelection = calendar.startOfDay(for: date)
+        let normalizedCreation = calendar.startOfDay(for: creationDate)
+        return normalizedSelection >= normalizedCreation
     }
 }
 
@@ -985,6 +1293,239 @@ private final class DateSelectionButton: UIControl {
     private func updateAppearance() {
         backgroundColor = isHighlightedState ? UIColor.systemGray5 : UIColor.clear
         layer.borderColor = isHighlightedState ? UIColor.systemGray4.cgColor : UIColor.clear.cgColor
+    }
+}
+
+private final class RecurrenceRowView: UIControl {
+    private let alignmentSpacer = UIView()
+    private let labelContainer = UIView()
+    private let recurrenceLabel = UILabel()
+    let countTextField = UITextField()
+    private let spacer = UIView()
+    private let accessoryImageView = UIImageView()
+    private let menuButton: UIButton
+    private var storedMenuProvider: (() -> UIMenu)?
+
+    var onLabelTapped: (() -> Void)?
+
+    var isLabelSelected: Bool = false {
+        didSet { updateSelectionAppearance() }
+    }
+
+    var accessoryImage: UIImage? {
+        didSet {
+            accessoryImageView.image = accessoryImage
+            accessoryImageView.isHidden = accessoryImage == nil
+        }
+    }
+
+    var menuProvider: (() -> UIMenu)? {
+        didSet {
+            storedMenuProvider = menuProvider
+            configureMenu()
+        }
+    }
+
+    override init(frame: CGRect) {
+        if #available(iOS 14.0, *) {
+            menuButton = MenuAnchorButton(type: .system)
+        } else {
+            menuButton = UIButton(type: .system)
+        }
+        super.init(frame: frame)
+        setupViews()
+    }
+
+    required init?(coder: NSCoder) {
+        if #available(iOS 14.0, *) {
+            menuButton = MenuAnchorButton(type: .system)
+        } else {
+            menuButton = UIButton(type: .system)
+        }
+        super.init(coder: coder)
+        setupViews()
+    }
+
+    private func setupViews() {
+        recurrenceLabel.font = UIFont.systemFont(ofSize: 16)
+        recurrenceLabel.textColor = UIColor.label
+        recurrenceLabel.numberOfLines = 1
+
+        countTextField.font = UIFont.systemFont(ofSize: 16)
+        countTextField.keyboardType = .numberPad
+        countTextField.textColor = UIColor.clear
+        countTextField.tintColor = UIColor.systemBlue
+        countTextField.borderStyle = .none
+        countTextField.isHidden = true
+        countTextField.backgroundColor = .clear
+        countTextField.returnKeyType = .done
+        countTextField.textAlignment = .left
+
+        labelContainer.layer.cornerRadius = 4
+        labelContainer.layer.masksToBounds = true
+        labelContainer.isUserInteractionEnabled = true
+        labelContainer.addSubview(recurrenceLabel)
+        labelContainer.addSubview(countTextField)
+
+        recurrenceLabel.snp.makeConstraints { make in
+            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8))
+        }
+
+        countTextField.snp.makeConstraints { make in
+            make.edges.equalTo(recurrenceLabel)
+        }
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(labelTapped))
+        labelContainer.addGestureRecognizer(tap)
+
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        accessoryImageView.tintColor = .gray
+        accessoryImageView.isHidden = true
+        accessoryImageView.contentMode = .scaleAspectFit
+
+        let stack = UIStackView(arrangedSubviews: [alignmentSpacer, labelContainer, spacer, accessoryImageView])
+        stack.axis = .horizontal
+        stack.alignment = .center
+        stack.spacing = 16
+        stack.isUserInteractionEnabled = true
+
+        addSubview(stack)
+        stack.snp.makeConstraints { make in
+            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 20))
+        }
+
+        alignmentSpacer.snp.makeConstraints { make in
+            make.width.equalTo(iconSize + 16)
+        }
+
+        accessoryImageView.snp.makeConstraints { make in
+            make.width.equalTo(21)
+            make.height.equalTo(21)
+        }
+
+        menuButton.setTitle(nil, for: .normal)
+        menuButton.tintColor = .clear
+        menuButton.backgroundColor = .clear
+        menuButton.isHidden = true
+        menuButton.isUserInteractionEnabled = true
+        addSubview(menuButton)
+        menuButton.snp.makeConstraints { make in
+            make.top.bottom.equalToSuperview()
+            make.leading.equalTo(labelContainer.snp.trailing)
+            make.trailing.equalToSuperview()
+        }
+
+        if #available(iOS 14.0, *), let anchorButton = menuButton as? MenuAnchorButton {
+            anchorButton.anchorPointProvider = { [weak self] in
+                guard let self else { return CGPoint.zero }
+                let localCenter = CGPoint(x: self.accessoryImageView.bounds.midX, y: self.accessoryImageView.bounds.midY)
+                return self.accessoryImageView.convert(localCenter, to: anchorButton)
+            }
+        }
+
+        menuButton.addTarget(self, action: #selector(forwardTouchDown), for: .touchDown)
+        menuButton.addTarget(self, action: #selector(forwardTouchUpInside), for: .touchUpInside)
+        menuButton.addTarget(self, action: #selector(forwardTouchCancel), for: [.touchCancel, .touchDragExit, .touchUpOutside])
+
+        updateSelectionAppearance()
+    }
+
+    override var isHighlighted: Bool {
+        didSet { backgroundColor = isHighlighted ? UIColor.systemGray5 : UIColor.clear }
+    }
+
+    func updateLabel(text: String) {
+        recurrenceLabel.text = text
+    }
+
+    func beginCountEditing(with value: Int?) {
+        countTextField.isHidden = false
+        if let value {
+            countTextField.text = String(value)
+        } else {
+            countTextField.text = nil
+        }
+        countTextField.becomeFirstResponder()
+    }
+
+    func endCountEditing() {
+        countTextField.resignFirstResponder()
+        countTextField.isHidden = true
+    }
+
+    func showMenu() {
+        guard #available(iOS 14.0, *) else { return }
+        configureMenu()
+        menuButton.sendActions(for: .touchDown)
+        menuButton.sendActions(for: .touchUpInside)
+    }
+
+    func refreshMenu() {
+        configureMenu()
+    }
+
+    private func configureMenu() {
+        guard let provider = storedMenuProvider else {
+            menuButton.menu = nil
+            menuButton.isHidden = true
+            return
+        }
+
+        guard #available(iOS 14.0, *) else {
+            menuButton.menu = nil
+            menuButton.isHidden = true
+            return
+        }
+
+        menuButton.isHidden = false
+        menuButton.menu = provider()
+        menuButton.showsMenuAsPrimaryAction = true
+    }
+
+    private func updateSelectionAppearance() {
+        labelContainer.backgroundColor = isLabelSelected ? UIColor.secondarySystemFill : UIColor.clear
+    }
+
+    @objc private func labelTapped() {
+        onLabelTapped?()
+    }
+
+    @objc private func forwardTouchDown() {
+        isHighlighted = true
+        sendActions(for: .touchDown)
+    }
+
+    @objc private func forwardTouchUpInside() {
+        isHighlighted = false
+        sendActions(for: .touchUpInside)
+    }
+
+    @objc private func forwardTouchCancel() {
+        isHighlighted = false
+        sendActions(for: .touchCancel)
+    }
+}
+
+private final class RecurrenceCalendarRow: UIView {
+    let calendarView = UICalendarView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = UIColor.secondarySystemBackground
+        layer.cornerRadius = 12
+        layer.masksToBounds = true
+
+        
+        addSubview(calendarView)
+        calendarView.snp.makeConstraints { make in
+            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12))
+        }
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }
 
