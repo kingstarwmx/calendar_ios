@@ -585,9 +585,16 @@ final class AddEventViewController: UIViewController {
 
     @objc private func recurrenceLabelTapped() {
         guard !recurrenceRow.isHidden else { return }
-        isRecurrenceLabelSelected.toggle()
-        if recurrenceMode == .limitedCount && !isRecurrenceLabelSelected {
-            view.endEditing(true)
+        switch recurrenceMode {
+        case .limitedCount:
+            isRecurrenceLabelSelected.toggle()
+            if !isRecurrenceLabelSelected {
+                view.endEditing(true)
+            }
+        case .specificDate:
+            isRecurrenceLabelSelected.toggle()
+        case .infinite:
+            return
         }
         updateRecurrenceRowContent()
     }
@@ -1041,8 +1048,10 @@ final class AddEventViewController: UIViewController {
             recurrenceRow.updateLabel(text: recurrenceDisplayString(from: date))
             recurrenceRow.isLabelSelected = isRecurrenceLabelSelected
             recurrenceRow.endCountEditing()
-            recurrenceCalendarRow.isHidden = false
-            selectCalendarDate(date, animated: false)
+            recurrenceCalendarRow.isHidden = !isRecurrenceLabelSelected
+            if isRecurrenceLabelSelected {
+                selectCalendarDate(date, animated: false)
+            }
         case .limitedCount:
             recurrenceRow.updateLabel(text: limitedCountDisplayText())
             recurrenceRow.isLabelSelected = isRecurrenceLabelSelected
@@ -1053,6 +1062,7 @@ final class AddEventViewController: UIViewController {
             }
             recurrenceCalendarRow.isHidden = true
         }
+        recurrenceRow.refreshMenu()
     }
 
     private func selectCalendarDate(_ date: Date, animated: Bool) {
@@ -1377,6 +1387,7 @@ private final class RecurrenceRowView: UIControl {
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(labelTapped))
         labelContainer.addGestureRecognizer(tap)
+        labelContainer.setContentHuggingPriority(.defaultHigh, for: .horizontal)
 
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -1397,7 +1408,7 @@ private final class RecurrenceRowView: UIControl {
         }
 
         alignmentSpacer.snp.makeConstraints { make in
-            make.width.equalTo(iconSize + 16)
+            make.width.equalTo(iconSize + 15)
         }
 
         accessoryImageView.snp.makeConstraints { make in
