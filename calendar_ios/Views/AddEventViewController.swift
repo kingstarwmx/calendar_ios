@@ -82,6 +82,12 @@ final class AddEventViewController: UIViewController {
     private let locationRow = IconTextFieldRow(iconName: "mappin.and.ellipse", placeholder: "位置")
     private let urlRow = IconTextFieldRow(iconName: "link", placeholder: "URL")
     private let notesRow = NotesInputRow(iconName: "text.alignleft", placeholder: "备注")
+    private lazy var backgroundTapGesture: UITapGestureRecognizer = {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(backgroundTapped))
+        tap.cancelsTouchesInView = false
+        tap.delegate = self
+        return tap
+    }()
 
     // MARK: - State
 
@@ -486,9 +492,7 @@ final class AddEventViewController: UIViewController {
     }
 
     private func configureActions() {
-        let tap = UITapGestureRecognizer(target: self, action: #selector(backgroundTapped))
-        tap.cancelsTouchesInView = false
-        view.addGestureRecognizer(tap)
+        view.addGestureRecognizer(backgroundTapGesture)
     }
 
     // MARK: - Actions
@@ -1045,7 +1049,8 @@ final class AddEventViewController: UIViewController {
             recurrenceCalendarRow.isHidden = true
         case .specificDate:
             let date = recurrenceSelectedDate ?? creationDate
-            recurrenceRow.updateLabel(text: recurrenceDisplayString(from: date))
+            let labelText = "结束时间：" + recurrenceDisplayString(from: date)
+            recurrenceRow.updateLabel(text: labelText)
             recurrenceRow.isLabelSelected = isRecurrenceLabelSelected
             recurrenceRow.endCountEditing()
             recurrenceCalendarRow.isHidden = !isRecurrenceLabelSelected
@@ -1235,6 +1240,21 @@ extension AddEventViewController: UICalendarSelectionSingleDateDelegate {
         let normalizedSelection = calendar.startOfDay(for: date)
         let normalizedCreation = calendar.startOfDay(for: creationDate)
         return normalizedSelection >= normalizedCreation
+    }
+}
+
+extension AddEventViewController: UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard gestureRecognizer === backgroundTapGesture else { return true }
+
+        var view: UIView? = touch.view
+        while let current = view {
+            if current is UIControl || current is UITextView {
+                return false
+            }
+            view = current.superview
+        }
+        return true
     }
 }
 
