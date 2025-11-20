@@ -15,6 +15,7 @@ final class Event: Identifiable, Hashable, Codable {
         case description
         case customColorHex
         case recurrenceRule
+        case repeatConfiguration
         case reminders
         case url
         case calendarName
@@ -33,6 +34,7 @@ final class Event: Identifiable, Hashable, Codable {
     var description: String?
     var customColor: UIColor?
     var recurrenceRule: String?
+    var repeatConfiguration: RepeatRule?
     var reminders: [Date]
     var url: String?
     var calendarName: String?
@@ -52,6 +54,7 @@ final class Event: Identifiable, Hashable, Codable {
         description: String? = nil,
         customColor: UIColor? = nil,
         recurrenceRule: String? = nil,
+        repeatConfiguration: RepeatRule? = nil,
         reminders: [Date] = [],
         url: String? = nil,
         calendarName: String? = nil,
@@ -69,6 +72,7 @@ final class Event: Identifiable, Hashable, Codable {
         self.description = description
         self.customColor = customColor
         self.recurrenceRule = recurrenceRule
+        self.repeatConfiguration = repeatConfiguration
         self.reminders = reminders.sorted()
         self.url = url
         self.calendarName = calendarName
@@ -89,6 +93,7 @@ final class Event: Identifiable, Hashable, Codable {
         description: String? = nil,
         customColor: UIColor? = nil,
         recurrenceRule: String? = nil,
+        repeatConfiguration: RepeatRule? = nil,
         reminders: [Date]? = nil,
         url: String? = nil,
         calendarName: String? = nil,
@@ -107,6 +112,7 @@ final class Event: Identifiable, Hashable, Codable {
             description: description ?? self.description,
             customColor: customColor ?? self.customColor,
             recurrenceRule: recurrenceRule ?? self.recurrenceRule,
+            repeatConfiguration: repeatConfiguration ?? self.repeatConfiguration,
             reminders: reminders ?? self.reminders,
             url: url ?? self.url,
             calendarName: calendarName ?? self.calendarName,
@@ -143,6 +149,7 @@ final class Event: Identifiable, Hashable, Codable {
         let description = try container.decodeIfPresent(String.self, forKey: .description)
         let customColorHex = try container.decodeIfPresent(String.self, forKey: .customColorHex)
         let recurrenceRule = try container.decodeIfPresent(String.self, forKey: .recurrenceRule)
+        let repeatConfiguration = try container.decodeIfPresent(RepeatRule.self, forKey: .repeatConfiguration)
         let reminders = try container.decodeIfPresent([Date].self, forKey: .reminders) ?? []
         let url = try container.decodeIfPresent(String.self, forKey: .url)
         let calendarName = try container.decodeIfPresent(String.self, forKey: .calendarName)
@@ -161,6 +168,7 @@ final class Event: Identifiable, Hashable, Codable {
             description: description,
             customColor: customColorHex.flatMap { UIColor(hexString: $0) },
             recurrenceRule: recurrenceRule,
+            repeatConfiguration: repeatConfiguration,
             reminders: reminders,
             url: url,
             calendarName: calendarName,
@@ -182,6 +190,7 @@ final class Event: Identifiable, Hashable, Codable {
         try container.encode(description, forKey: .description)
         try container.encode(customColor?.toHexString(includeAlpha: true), forKey: .customColorHex)
         try container.encode(recurrenceRule, forKey: .recurrenceRule)
+        try container.encode(repeatConfiguration, forKey: .repeatConfiguration)
         try container.encode(reminders, forKey: .reminders)
         try container.encode(url, forKey: .url)
         try container.encode(calendarName, forKey: .calendarName)

@@ -107,6 +107,7 @@ final class DeviceCalendarService {
                 ekEvent.notes = event.description
                 ekEvent.url = event.url.flatMap(URL.init(string:))
                 ekEvent.alarms = event.reminders.map { EKAlarm(absoluteDate: $0) }
+                self.applyRecurrenceRule(from: event, to: ekEvent)
 
                 do {
                     try self.eventStore.save(ekEvent, span: .thisEvent, commit: true)
@@ -143,6 +144,7 @@ final class DeviceCalendarService {
                 ekEvent.notes = event.description
                 ekEvent.url = event.url.flatMap(URL.init(string:))
                 ekEvent.alarms = event.reminders.map { EKAlarm(absoluteDate: $0) }
+                self.applyRecurrenceRule(from: event, to: ekEvent)
 
                 do {
                     try self.eventStore.save(ekEvent, span: .thisEvent, commit: true)
@@ -281,6 +283,7 @@ final class DeviceCalendarService {
             color = nil
         }
 
+        let repeatRule = ekEvent.recurrenceRules?.first.flatMap { RepeatRule(ekRule: $0) }
         return Event(
             id: ekEvent.eventIdentifier,
             title: ekEvent.title ?? "",
@@ -291,12 +294,21 @@ final class DeviceCalendarService {
             calendarId: ekEvent.calendar.calendarIdentifier,
             description: ekEvent.notes,
             customColor: color,
-            recurrenceRule: nil,
+            recurrenceRule: repeatRule?.toRRule(startDate: ekEvent.startDate),
+            repeatConfiguration: repeatRule,
             reminders: reminders,
             url: ekEvent.url?.absoluteString,
             calendarName: ekEvent.calendar.title,
             isFromDeviceCalendar: true,
             deviceEventId: ekEvent.eventIdentifier
         )
+    }
+
+    private func applyRecurrenceRule(from event: Event, to ekEvent: EKEvent) {
+        if let rule = event.repeatConfiguration, let ekRule = rule.toEKRecurrenceRule(startDate: event.startDate) {
+            ekEvent.recurrenceRules = [ekRule]
+        } else {
+            ekEvent.recurrenceRules = nil
+        }
     }
 }

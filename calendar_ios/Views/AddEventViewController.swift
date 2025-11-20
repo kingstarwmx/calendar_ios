@@ -522,6 +522,20 @@ final class AddEventViewController: UIViewController {
             return [reminderDate]
         } ?? []
 
+        let resolvedRepeatRule = resolvedRepeatRule()
+        if !selectedRepeatRule.isNone && resolvedRepeatRule == nil {
+            switch recurrenceMode {
+            case .limitedCount:
+                showAlert(message: "请输入重复次数")
+                return
+            case .specificDate:
+                showAlert(message: "请选择结束日期")
+                return
+            case .infinite:
+                break
+            }
+        }
+
         let locationText = locationRow.textField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let urlText = urlRow.textField.text?.trimmingCharacters(in: .whitespacesAndNewlines)
         let descriptionText = notesRow.textView.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -536,7 +550,8 @@ final class AddEventViewController: UIViewController {
             calendarId: "local",
             description: descriptionText.isEmpty ? nil : descriptionText,
             customColor: UIColor.systemBlue,
-            recurrenceRule: recurrenceString(for: selectedRepeatRule),
+            recurrenceRule: resolvedRepeatRule?.toRRule(startDate: startDate),
+            repeatConfiguration: resolvedRepeatRule,
             reminders: reminders,
             url: urlText?.isEmpty == false ? urlText : nil,
             calendarName: "本地日历",
@@ -714,7 +729,7 @@ final class AddEventViewController: UIViewController {
         }
 
         let customAction = UIAction(title: "自定义…", image: nil, identifier: nil) { [weak self] _ in
-            self?.presentCustomRepeatPlaceholder()
+            self?.presentCustomRepeatController()
         }
 
         var children: [UIMenuElement] = actions
@@ -747,7 +762,7 @@ final class AddEventViewController: UIViewController {
         }
 
         alert.addAction(UIAlertAction(title: "自定义…", style: .default) { [weak self] _ in
-            self?.presentCustomRepeatPlaceholder()
+            self?.presentCustomRepeatController()
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
 
@@ -1101,28 +1116,39 @@ final class AddEventViewController: UIViewController {
         return "_次后结束"
     }
 
-    private func recurrenceString(for rule: RepeatRule) -> String? {
-        guard !rule.isNone else { return nil }
-
-        switch rule.frequency {
-        case .daily:
-            return "FREQ=DAILY;INTERVAL=\(rule.interval)"
-        case .weekly:
-            var components = ["FREQ=WEEKLY", "INTERVAL=\(rule.interval)"]
-            if let weekdays = rule.weekdays, !weekdays.isEmpty {
-                let symbols = weekdays.compactMap { weekdaySymbol(for: $0) }
-                if !symbols.isEmpty {
-                    components.append("BYDAY=\(symbols.joined(separator: ","))")
-                }
-            }
-            return components.joined(separator: ";")
-        case .monthly:
-            return "FREQ=MONTHLY;INTERVAL=\(rule.interval)"
-        case .yearly:
-            return "FREQ=YEARLY;INTERVAL=\(rule.interval)"
-        case .none:
-            return nil
+    private func resolvedRepeatRule() -> RepeatRule? {
+        guard !selectedRepeatRule.isNone else { return nil }
+        var rule = selectedRepeatRule
+        switch recurrenceMode {
+        case .infinite:
+            rule.endType = .never
+            rule.count = nil
+            rule.endDate = nil
+        case .limitedCount:
+            guard let count = recurrenceLimitedCount, count > 0 else { return nil }
+            rule.endType = .count
+            rule.count = count
+            rule.endDate = nil
+        case .specificDate:
+            let targetDate = recurrenceSelectedDate ?? creationDate
+            rule.endType = .until
+            rule.endDate = normalizedEndDate(from: targetDate)
+            rule.count = nil
         }
+        return rule
+    }
+
+    private func normalizedEndDate(from date: Date) -> Date {
+        let calendar = Calendar.current
+        if isAllDay {
+            return calendar.startOfDay(for: date)
+        }
+        var dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
+        let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: startDate)
+        dateComponents.hour = timeComponents.hour
+        dateComponents.minute = timeComponents.minute
+        dateComponents.second = timeComponents.second
+        return calendar.date(from: dateComponents) ?? date
     }
 
     private func weekdaySymbol(for index: Int) -> String? {
@@ -1153,12 +1179,48 @@ final class AddEventViewController: UIViewController {
             }
             return rule.interval == 1 ? "每周" : "每\(rule.interval)周"
         case .monthly:
-            return rule.interval == 1 ? "每月" : "每\(rule.interval)月"
+            var prefix = rule.interval == 1 ? "每月" : "每\(rule.interval)月"
+            if rule.monthMode == .byDate, let days = rule.monthDays, !days.isEmpty {
+                let text = days.sorted().map { "\($0)日" }.joined(separator: "、")
+                prefix += "的\(text)"
+            } else if rule.monthMode == .byWeekday, let ordinal = rule.weekOrdinal, let weekday = rule.weekday {
+                prefix += "的\(ordinalDescription(for: ordinal))\(weekdayDescription(for: weekday))"
+            }
+            return prefix
         case .yearly:
-            return rule.interval == 1 ? "每年" : "每\(rule.interval)年"
+            var prefix = rule.interval == 1 ? "每年" : "每\(rule.interval)年"
+            if let months = rule.months, !months.isEmpty {
+                let text = months.sorted().map { "\($0)月" }.joined(separator: "、")
+                prefix += "的\(text)"
+            }
+            if rule.yearMode == .byWeekday, let ordinal = rule.weekOrdinal, let weekday = rule.weekday {
+                prefix += "的\(ordinalDescription(for: ordinal))\(weekdayDescription(for: weekday, long: true))"
+            }
+            return prefix
         case .none:
             return "不重复"
         }
+    }
+
+    private func ordinalDescription(for value: Int) -> String {
+        let map = [
+            1: "第一个",
+            2: "第二个",
+            3: "第三个",
+            4: "第四个",
+            5: "第五个",
+            6: "倒数第二个",
+            7: "最后一个"
+        ]
+        return map[value] ?? ""
+    }
+
+    private func weekdayDescription(for value: Int, long: Bool = false) -> String {
+        let short = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+        let longNames = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
+        let names = long ? longNames : short
+        guard value >= 1, value <= names.count else { return "" }
+        return names[value - 1]
     }
 
     private func showAlert(message: String) {
@@ -1167,14 +1229,14 @@ final class AddEventViewController: UIViewController {
         present(alert, animated: true)
     }
 
-    private func presentCustomRepeatPlaceholder() {
-        let alert = UIAlertController(
-            title: "自定义重复",
-            message: "自定义重复设置开发中，暂未提供详细界面。",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "知道了", style: .default))
-        present(alert, animated: true)
+    private func presentCustomRepeatController() {
+        let controller = RepeatRuleViewController(initialRule: selectedRepeatRule, baseDate: startDate)
+        controller.onRuleChange = { [weak self] rule in
+            guard let self else { return }
+            self.selectedRepeatRule = rule
+            self.updateRepeatDisplay()
+        }
+        navigationController?.pushViewController(controller, animated: true)
     }
 }
 

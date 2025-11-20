@@ -93,10 +93,29 @@ struct RepeatRule: Codable, Equatable {
     func humanReadableDescription() -> String {
         var base = "日程将"
         if interval > 1 {
-            base += "每\\(interval)"
+            base += "每\(interval)"
         } else {
             base += "每"
         }
+
+        let ordinalDescriptions = [
+            1: "第一个",
+            2: "第二个",
+            3: "第三个",
+            4: "第四个",
+            5: "第五个",
+            6: "倒数第二个",
+            7: "最后一个"
+        ]
+        let weekdayDescriptions = [
+            1: "星期日",
+            2: "星期一",
+            3: "星期二",
+            4: "星期三",
+            5: "星期四",
+            6: "星期五",
+            7: "星期六"
+        ]
 
         switch frequency {
         case .none:
@@ -111,7 +130,7 @@ struct RepeatRule: Codable, Equatable {
                     let clamped = max(0, min(index, names.count - 1))
                     return "周" + names[clamped]
                 }.joined(separator: "、")
-                base += "的\\(selected)"
+                base += "的\(selected)"
             }
         case .monthly:
             base += "月"
@@ -119,15 +138,16 @@ struct RepeatRule: Codable, Equatable {
                 let values = monthDays.map { "\($0)号" }.joined(separator: "、")
                 base += "的\(values)"
             } else if monthMode == .byWeekday, let weekOrdinal, let weekday {
-                let ordinals = [0: "", 1: "第一个", 2: "第二个", 3: "第三个", 4: "第四个", 5: "最后一个"]
-                let weekdays = [1: "星期日", 2: "星期一", 3: "星期二", 4: "星期三", 5: "星期四", 6: "星期五", 7: "星期六"]
-                base += "的\(ordinals[weekOrdinal] ?? "")\(weekdays[weekday] ?? "")"
+                base += "的\(ordinalDescriptions[weekOrdinal] ?? "")\(weekdayDescriptions[weekday] ?? "")"
             }
         case .yearly:
             base += "年"
             if let months, !months.isEmpty {
                 let values = months.map { "\($0)月" }.joined(separator: "、")
                 base += "的\(values)"
+            }
+            if yearMode == .byWeekday, let weekOrdinal, let weekday {
+                base += "的\(ordinalDescriptions[weekOrdinal] ?? "")\(weekdayDescriptions[weekday] ?? "")"
             }
         }
 
@@ -136,7 +156,7 @@ struct RepeatRule: Codable, Equatable {
             base += "重复。"
         case .count:
             if let count {
-                base += "重复\\(count)次。"
+                base += "重复\(count)次。"
             } else {
                 base += "重复若干次。"
             }
@@ -144,7 +164,7 @@ struct RepeatRule: Codable, Equatable {
             if let endDate {
                 let formatter = DateFormatter()
                 formatter.dateStyle = .medium
-                base += "直至\\(formatter.string(from: endDate))。"
+                base += "直至\(formatter.string(from: endDate))。"
             } else {
                 base += "直到指定日期。"
             }
