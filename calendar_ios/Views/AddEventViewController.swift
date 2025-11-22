@@ -393,6 +393,9 @@ final class AddEventViewController: UIViewController {
         recurrenceRow.onLabelTapped = { [weak self] in
             self?.recurrenceLabelTapped()
         }
+        recurrenceRow.onCountEditingDone = { [weak self] in
+            self?.recurrenceCountEditingDone()
+        }
         recurrenceRow.addTarget(self, action: #selector(recurrenceRowTapped), for: .touchUpInside)
         recurrenceRow.accessoryImage = UIImage(systemName: "chevron.up.chevron.down")
         recurrenceRow.isHidden = true
@@ -615,6 +618,17 @@ final class AddEventViewController: UIViewController {
         case .infinite:
             return
         }
+        updateRecurrenceRowContent()
+    }
+
+    private func recurrenceCountEditingDone() {
+        guard !recurrenceRow.isHidden else { return }
+        if let text = recurrenceRow.countTextField.text, let value = Int(text), value > 0 {
+            recurrenceLimitedCount = value
+        } else {
+            recurrenceLimitedCount = nil
+        }
+        isRecurrenceLabelSelected = false
         updateRecurrenceRowContent()
     }
 
@@ -1403,6 +1417,7 @@ private final class RecurrenceRowView: UIControl {
     private var storedMenuProvider: (() -> UIMenu)?
 
     var onLabelTapped: (() -> Void)?
+    var onCountEditingDone: (() -> Void)?
 
     var isLabelSelected: Bool = false {
         didSet { updateSelectionAppearance() }
@@ -1459,6 +1474,14 @@ private final class RecurrenceRowView: UIControl {
         countTextField.backgroundColor = .clear
         countTextField.returnKeyType = .done
         countTextField.textAlignment = .left
+
+        // 配置键盘工具栏
+        let toolbar = UIToolbar()
+        toolbar.sizeToFit()
+        let flexSpace = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let doneButton = UIBarButtonItem(title: "完成", style: .done, target: self, action: #selector(countEditingDoneButtonTapped))
+        toolbar.items = [flexSpace, doneButton]
+        countTextField.inputAccessoryView = toolbar
         
         labelBgView.layer.cornerRadius = 4
         labelBgView.layer.masksToBounds = true
@@ -1618,6 +1641,11 @@ private final class RecurrenceRowView: UIControl {
 
     @objc private func labelTapped() {
         onLabelTapped?()
+    }
+
+    @objc private func countEditingDoneButtonTapped() {
+        countTextField.resignFirstResponder()
+        onCountEditingDone?()
     }
 
     @objc private func forwardTouchDown() {
