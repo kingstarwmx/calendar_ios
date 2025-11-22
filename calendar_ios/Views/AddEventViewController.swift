@@ -1543,7 +1543,7 @@ private final class RecurrenceRowView: UIControl {
         }
 
         labelContainer.snp.makeConstraints { make in
-            make.leading.equalTo(alignmentSpacer.snp.trailing).offset(16)
+            make.leading.equalTo(alignmentSpacer.snp.trailing).offset(14)
             make.centerY.equalToSuperview()
             make.top.bottom.equalToSuperview()
         }

@@ -127,9 +127,10 @@ final class EventViewModel: ObservableObject {
 
         do {
             let savedEvent = try await calendarService.createEvent(event)
-            events.append(savedEvent)
-            events.sort(by: chronologicalSort)
             print("✅ 事件添加成功")
+
+            // 刷新所有数据，特别是对于重复事件需要加载所有实例
+            loadEvents(forceRefresh: true)
         } catch {
             print("❌ 添加事件失败: \(error)")
             assertionFailure("Failed to add event: \(error)")
@@ -139,10 +140,12 @@ final class EventViewModel: ObservableObject {
     func updateEvent(_ event: Event) async {
         do {
             let updatedEvent = try await calendarService.updateEvent(event)
-            if let index = events.firstIndex(where: { $0.id == event.id }) {
-                events[index] = updatedEvent
-            }
+            print("✅ 事件更新成功")
+
+            // 刷新所有数据，特别是对于重复事件需要重新加载所有实例
+            loadEvents(forceRefresh: true)
         } catch {
+            print("❌ 更新事件失败: \(error)")
             assertionFailure("Failed to update event: \(error)")
         }
     }
@@ -150,8 +153,12 @@ final class EventViewModel: ObservableObject {
     func deleteEvent(id: String) async {
         do {
             try await calendarService.deleteEvent(id: id)
-            events.removeAll { $0.id == id }
+            print("✅ 事件删除成功")
+
+            // 刷新所有数据，特别是对于重复事件需要重新加载
+            loadEvents(forceRefresh: true)
         } catch {
+            print("❌ 删除事件失败: \(error)")
             assertionFailure("Failed to delete event: \(error)")
         }
     }
