@@ -7,6 +7,7 @@ final class RepeatRuleViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let contentView = UIView()
     private let stackView = UIStackView()
+    private let summaryIconView = UIImageView()
     private let summaryLabel = UILabel()
     private let intervalPicker = UIPickerView()
     private let dailyInfoLabel = UILabel()
@@ -123,15 +124,31 @@ final class RepeatRuleViewController: UIViewController {
         stackView.spacing = 24
         stackView.layoutMargins = UIEdgeInsets(top: 24, left: 16, bottom: 40, right: 16)
         stackView.isLayoutMarginsRelativeArrangement = true
+        
+        
 
         summaryLabel.numberOfLines = 0
-        summaryLabel.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
+        summaryLabel.font = UIFont.systemFont(ofSize: 18)
+        
+        summaryIconView.image = UIImage(systemName: "repeat")
+        summaryIconView.tintColor = .secondaryLabel
+        summaryIconView.snp.makeConstraints { make in
+            make.width.height.equalTo(23)
+        }
 
+        
+        let summaryStack = UIStackView(arrangedSubviews: [summaryIconView, summaryLabel])
+        summaryStack.axis = .horizontal
+        summaryStack.alignment = .center
+        summaryStack.spacing = 16
+        summaryStack.isUserInteractionEnabled = false
+
+        
         intervalPicker.setContentCompressionResistancePriority(.required, for: .vertical)
 
-        dailyInfoLabel.text = "将按照所选天数重复"
-        dailyInfoLabel.textColor = .secondaryLabel
-        dailyInfoLabel.font = UIFont.systemFont(ofSize: 15)
+//        dailyInfoLabel.text = "将按照所选天数重复"
+//        dailyInfoLabel.textColor = .secondaryLabel
+//        dailyInfoLabel.font = UIFont.systemFont(ofSize: 15)
 
         weeklyTitleLabel.text = "选择重复的星期"
         weeklyTitleLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
@@ -166,12 +183,12 @@ final class RepeatRuleViewController: UIViewController {
             make.edges.equalToSuperview()
         }
 
-        stackView.addArrangedSubview(summaryLabel)
+        stackView.addArrangedSubview(summaryStack)
         stackView.addArrangedSubview(intervalPicker)
         intervalPicker.snp.makeConstraints { make in
             make.height.equalTo(180)
         }
-        stackView.addArrangedSubview(dailyInfoLabel)
+//        stackView.addArrangedSubview(dailyInfoLabel)
 
         weeklySection.addSubview(weeklyTitleLabel)
         weeklySection.addSubview(weekdaySelector)
@@ -292,7 +309,7 @@ final class RepeatRuleViewController: UIViewController {
     }
 
     private func updateFrequencySections() {
-        dailyInfoLabel.isHidden = selectedFrequency != .daily
+//        dailyInfoLabel.isHidden = selectedFrequency != .daily
         weeklySection.isHidden = selectedFrequency != .weekly
         monthlySection.isHidden = selectedFrequency != .monthly
         yearlySection.isHidden = selectedFrequency != .yearly
@@ -450,7 +467,7 @@ private final class WeekdaySelectorView: UIView {
     var onSelectionChanged: ((Set<Int>) -> Void)?
 
     private let stackView = UIStackView()
-    private var buttons: [SelectionChipButton] = []
+    private var rows: [WeekdayRowControl] = []
     private let calendar: Calendar = .autoupdatingCurrent
     private var selection: Set<Int> = []
 
@@ -465,9 +482,8 @@ private final class WeekdaySelectorView: UIView {
     }
 
     private func setup() {
-        stackView.axis = .horizontal
-        stackView.spacing = 8
-        stackView.distribution = .fillEqually
+        stackView.axis = .vertical
+        stackView.spacing = 4
         addSubview(stackView)
         stackView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
@@ -475,12 +491,11 @@ private final class WeekdaySelectorView: UIView {
 
         let orderedWeekdays = orderedWeekdayValues()
         orderedWeekdays.forEach { weekday in
-            let button = SelectionChipButton()
-            button.setTitle(label(for: weekday), for: .normal)
-            button.tag = weekday
-            button.addTarget(self, action: #selector(dayTapped(_:)), for: .touchUpInside)
-            stackView.addArrangedSubview(button)
-            buttons.append(button)
+            let row = WeekdayRowControl(title: label(for: weekday))
+            row.tag = weekday
+            row.addTarget(self, action: #selector(dayTapped(_:)), for: .touchUpInside)
+            stackView.addArrangedSubview(row)
+            rows.append(row)
         }
     }
 
@@ -489,7 +504,7 @@ private final class WeekdaySelectorView: UIView {
         updateButtons()
     }
 
-    @objc private func dayTapped(_ sender: UIButton) {
+    @objc private func dayTapped(_ sender: UIControl) {
         let day = sender.tag
         var newSelection = selection
         if newSelection.contains(day) {
@@ -504,8 +519,8 @@ private final class WeekdaySelectorView: UIView {
     }
 
     private func updateButtons() {
-        buttons.forEach { button in
-            button.isSelected = selection.contains(button.tag)
+        rows.forEach { row in
+            row.isOn = selection.contains(row.tag)
         }
     }
 
@@ -523,6 +538,69 @@ private final class WeekdaySelectorView: UIView {
     private func label(for weekday: Int) -> String {
         let labels = [1: "周日", 2: "周一", 3: "周二", 4: "周三", 5: "周四", 6: "周五", 7: "周六"]
         return labels[weekday] ?? "周?"
+    }
+}
+
+private final class WeekdayRowControl: UIControl {
+    private let titleLabel = UILabel()
+    private let checkImageView = UIImageView(image: UIImage(systemName: "checkmark"))
+
+    var isOn: Bool = false {
+        didSet { updateAppearance() }
+    }
+
+    init(title: String) {
+        super.init(frame: .zero)
+        setup(title: title)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup(title: "")
+    }
+
+    private func setup(title: String) {
+        titleLabel.text = title
+        titleLabel.textColor = .label
+        titleLabel.font = UIFont.systemFont(ofSize: 17)
+
+        checkImageView.tintColor = UIColor.systemBlue
+        checkImageView.contentMode = .scaleAspectFit
+        checkImageView.isHidden = true
+
+        let container = UIStackView(arrangedSubviews: [titleLabel, UIView(), checkImageView])
+        container.axis = .horizontal
+        container.alignment = .center
+        container.spacing = 12
+        container.isUserInteractionEnabled = false
+        addSubview(container)
+
+        container.snp.makeConstraints { make in
+            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 10, left: 24, bottom: 10, right: 0))
+        }
+        heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+
+        addTarget(self, action: #selector(touchDown), for: [.touchDown, .touchDragEnter])
+        addTarget(self, action: #selector(touchUp), for: [.touchCancel, .touchDragExit, .touchUpInside, .touchUpOutside])
+
+        updateAppearance()
+    }
+
+    private func updateAppearance() {
+        checkImageView.isHidden = !isOn
+        backgroundColor = isHighlighted ? UIColor.systemGray6 : UIColor.clear
+    }
+
+    override var isHighlighted: Bool {
+        didSet { backgroundColor = isHighlighted ? UIColor.systemGray6 : UIColor.clear }
+    }
+
+    @objc private func touchDown() {
+        isHighlighted = true
+    }
+
+    @objc private func touchUp() {
+        isHighlighted = false
     }
 }
 

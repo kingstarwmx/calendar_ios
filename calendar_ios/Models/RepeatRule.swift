@@ -135,7 +135,7 @@ struct RepeatRule: Codable, Equatable {
         case .monthly:
             base += "月"
             if monthMode == .byDate, let monthDays, !monthDays.isEmpty {
-                let values = monthDays.map { "\($0)号" }.joined(separator: "、")
+                let values = monthDays.map { "\($0)日" }.joined(separator: "、")
                 base += "的\(values)"
             } else if monthMode == .byWeekday, let weekOrdinal, let weekday {
                 base += "的\(ordinalDescriptions[weekOrdinal] ?? "")\(weekdayDescriptions[weekday] ?? "")"
