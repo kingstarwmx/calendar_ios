@@ -1062,6 +1062,7 @@ final class AddEventViewController: UIViewController {
             recurrenceRow.isLabelSelected = isRecurrenceLabelSelected
             recurrenceRow.endCountEditing()
             recurrenceCalendarRow.isHidden = true
+            recurrenceRow.setLabelInteractionEnabled(false)
         case .specificDate:
             let date = recurrenceSelectedDate ?? creationDate
             let labelText = "结束时间：" + recurrenceDisplayString(from: date)
@@ -1069,12 +1070,14 @@ final class AddEventViewController: UIViewController {
             recurrenceRow.isLabelSelected = isRecurrenceLabelSelected
             recurrenceRow.endCountEditing()
             recurrenceCalendarRow.isHidden = !isRecurrenceLabelSelected
+            recurrenceRow.setLabelInteractionEnabled(true)
             if isRecurrenceLabelSelected {
                 selectCalendarDate(date, animated: false)
             }
         case .limitedCount:
             recurrenceRow.updateLabel(text: limitedCountDisplayText())
             recurrenceRow.isLabelSelected = isRecurrenceLabelSelected
+            recurrenceRow.setLabelInteractionEnabled(true)
             if isRecurrenceLabelSelected {
                 recurrenceRow.beginCountEditing(with: recurrenceLimitedCount)
             } else {
@@ -1393,7 +1396,6 @@ private final class RecurrenceRowView: UIControl {
     private let labelContainer = UIView()
     private let recurrenceLabel = UILabel()
     let countTextField = UITextField()
-    private let spacer = UIView()
     private let accessoryImageView = UIImageView()
     private let menuButton: UIButton
     private var storedMenuProvider: (() -> UIMenu)?
@@ -1470,44 +1472,50 @@ private final class RecurrenceRowView: UIControl {
         let tap = UITapGestureRecognizer(target: self, action: #selector(labelTapped))
         labelContainer.addGestureRecognizer(tap)
         labelContainer.setContentHuggingPriority(.defaultHigh, for: .horizontal)
-
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        labelContainer.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
 
         accessoryImageView.tintColor = .gray
         accessoryImageView.isHidden = true
         accessoryImageView.contentMode = .scaleAspectFit
 
-        let stack = UIStackView(arrangedSubviews: [alignmentSpacer, labelContainer, spacer, accessoryImageView])
-        stack.axis = .horizontal
-        stack.alignment = .center
-        stack.spacing = 16
-        stack.isUserInteractionEnabled = true
+        alignmentSpacer.setContentHuggingPriority(.required, for: .horizontal)
+        alignmentSpacer.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        addSubview(stack)
-        stack.snp.makeConstraints { make in
-            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 20))
-        }
-
-        alignmentSpacer.snp.makeConstraints { make in
-            make.width.equalTo(iconSize + 15)
-        }
-
-        accessoryImageView.snp.makeConstraints { make in
-            make.width.equalTo(21)
-            make.height.equalTo(21)
-        }
-
+        // 先添加 menuButton（最底层）
         menuButton.setTitle(nil, for: .normal)
         menuButton.tintColor = .clear
         menuButton.backgroundColor = .clear
         menuButton.isHidden = true
         menuButton.isUserInteractionEnabled = true
         addSubview(menuButton)
+
+        // 然后添加其他视图
+        addSubview(alignmentSpacer)
+        addSubview(labelContainer)
+        addSubview(accessoryImageView)
+
+        // 布局约束
+        alignmentSpacer.snp.makeConstraints { make in
+            make.leading.equalToSuperview()
+            make.centerY.equalToSuperview()
+            make.width.equalTo(iconSize + 15)
+        }
+
+        labelContainer.snp.makeConstraints { make in
+            make.leading.equalTo(alignmentSpacer.snp.trailing).offset(16)
+            make.centerY.equalToSuperview()
+        }
+
+        accessoryImageView.snp.makeConstraints { make in
+            make.trailing.equalToSuperview().offset(-20)
+            make.leading.greaterThanOrEqualTo(labelContainer.snp.trailing).offset(16)
+            make.centerY.equalToSuperview()
+            make.width.equalTo(21)
+            make.height.equalTo(21)
+        }
+
         menuButton.snp.makeConstraints { make in
-            make.top.bottom.equalToSuperview()
-            make.leading.equalTo(labelContainer.snp.trailing)
-            make.trailing.equalToSuperview()
+            make.edges.equalToSuperview()
         }
 
         if #available(iOS 14.0, *), let anchorButton = menuButton as? MenuAnchorButton {
@@ -1557,6 +1565,10 @@ private final class RecurrenceRowView: UIControl {
 
     func refreshMenu() {
         configureMenu()
+    }
+
+    func setLabelInteractionEnabled(_ enabled: Bool) {
+        labelContainer.isUserInteractionEnabled = enabled
     }
 
     private func configureMenu() {
