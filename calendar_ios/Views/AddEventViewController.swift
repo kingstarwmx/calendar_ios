@@ -1295,6 +1295,7 @@ extension AddEventViewController: UICalendarSelectionSingleDateDelegate {
         guard let dateComponents,
               let date = timeCalendar.date(from: dateComponents) else { return }
         recurrenceSelectedDate = date
+        isRecurrenceLabelSelected = false
         updateRecurrenceRowContent()
     }
 
@@ -1394,6 +1395,7 @@ private final class DateSelectionButton: UIControl {
 private final class RecurrenceRowView: UIControl {
     private let alignmentSpacer = UIView()
     private let labelContainer = UIView()
+    private let labelBgView = UIView()
     private let recurrenceLabel = UILabel()
     let countTextField = UITextField()
     private let accessoryImageView = UIImageView()
@@ -1441,9 +1443,12 @@ private final class RecurrenceRowView: UIControl {
     }
 
     private func setupViews() {
+        let emptyView = UIView()
+        
         recurrenceLabel.font = UIFont.systemFont(ofSize: 16)
         recurrenceLabel.textColor = UIColor.label
         recurrenceLabel.numberOfLines = 1
+        recurrenceLabel.isUserInteractionEnabled = false
 
         countTextField.font = UIFont.systemFont(ofSize: 16)
         countTextField.keyboardType = .numberPad
@@ -1454,12 +1459,18 @@ private final class RecurrenceRowView: UIControl {
         countTextField.backgroundColor = .clear
         countTextField.returnKeyType = .done
         countTextField.textAlignment = .left
+        
+        labelBgView.layer.cornerRadius = 4
+        labelBgView.layer.masksToBounds = true
+        labelBgView.isUserInteractionEnabled = false
+        
 
-        labelContainer.layer.cornerRadius = 4
-        labelContainer.layer.masksToBounds = true
         labelContainer.isUserInteractionEnabled = true
         labelContainer.addSubview(recurrenceLabel)
         labelContainer.addSubview(countTextField)
+        labelContainer.addSubview(labelBgView)
+        
+        
 
         recurrenceLabel.snp.makeConstraints { make in
             make.edges.equalToSuperview().inset(UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8))
@@ -1488,6 +1499,8 @@ private final class RecurrenceRowView: UIControl {
         menuButton.isHidden = true
         menuButton.isUserInteractionEnabled = true
         addSubview(menuButton)
+        
+        addSubview(emptyView)
 
         // 然后添加其他视图
         addSubview(alignmentSpacer)
@@ -1495,6 +1508,11 @@ private final class RecurrenceRowView: UIControl {
         addSubview(accessoryImageView)
 
         // 布局约束
+        labelBgView.snp.makeConstraints { make in
+            make.leading.trailing.equalTo(labelContainer)
+            make.centerY.equalToSuperview()
+            make.height.equalTo(35)
+        }
         alignmentSpacer.snp.makeConstraints { make in
             make.leading.equalToSuperview()
             make.centerY.equalToSuperview()
@@ -1504,6 +1522,11 @@ private final class RecurrenceRowView: UIControl {
         labelContainer.snp.makeConstraints { make in
             make.leading.equalTo(alignmentSpacer.snp.trailing).offset(16)
             make.centerY.equalToSuperview()
+            make.top.bottom.equalToSuperview()
+        }
+        emptyView.snp.makeConstraints { make in
+            make.leading.top.bottom.equalToSuperview()
+            make.trailing.equalTo(labelContainer.snp.leading)
         }
 
         accessoryImageView.snp.makeConstraints { make in
@@ -1590,7 +1613,7 @@ private final class RecurrenceRowView: UIControl {
     }
 
     private func updateSelectionAppearance() {
-        labelContainer.backgroundColor = isLabelSelected ? UIColor.secondarySystemFill : UIColor.clear
+        labelBgView.backgroundColor = isLabelSelected ? UIColor.secondarySystemFill : UIColor.clear
     }
 
     @objc private func labelTapped() {
