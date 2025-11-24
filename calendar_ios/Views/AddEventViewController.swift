@@ -68,8 +68,9 @@ final class AddEventViewController: UIViewController {
     private let endPickerContainer = UIView()
     private var startPickerHeightConstraint: Constraint?
     private var endPickerHeightConstraint: Constraint?
+    private var pickerStackTopConstraint: Constraint?
     private let pickerHeight: CGFloat = 216
-    private let timeRowHeight: CGFloat = 84
+    private let formRowHeight: CGFloat = 60
     private var timeRowHeightConstraint: Constraint?
     private let startDatePicker = UIDatePicker()
     private let endDatePicker = UIDatePicker()
@@ -261,6 +262,7 @@ final class AddEventViewController: UIViewController {
             make.height.equalTo(1.0 / UIScreen.main.scale)
         }
         stackView.addArrangedSubview(divider)
+        stackView.setCustomSpacing(0, after: divider)
     }
 
     private func configureFormStack() {
@@ -320,7 +322,7 @@ final class AddEventViewController: UIViewController {
         timeSection.addSubview(timeRow)
         timeRow.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview()
-            timeRowHeightConstraint = make.height.equalTo(timeRowHeight).constraint
+            timeRowHeightConstraint = make.height.equalTo(formRowHeight).constraint
         }
 
         pickerStack.axis = .vertical
@@ -331,7 +333,7 @@ final class AddEventViewController: UIViewController {
         pickerStack.alpha = 0
         timeSection.addSubview(pickerStack)
         pickerStack.snp.makeConstraints { make in
-            make.top.equalTo(timeRow.snp.bottom).offset(8)
+            pickerStackTopConstraint = make.top.equalTo(timeRow.snp.bottom).constraint
             make.leading.trailing.equalToSuperview()
             make.bottom.equalToSuperview()
         }
@@ -421,17 +423,16 @@ final class AddEventViewController: UIViewController {
         addFormRow(urlRow)
         addFormRow(notesRow, includeBottomSeparator: true)
 
-        let rowHeight: CGFloat = 60
         repeatRow.snp.makeConstraints { make in
-            make.height.equalTo(rowHeight)
+            make.height.equalTo(formRowHeight)
         }
 
         recurrenceRow.snp.makeConstraints { make in
-            make.height.equalTo(rowHeight)
+            make.height.equalTo(formRowHeight)
         }
 
         reminderRow.snp.makeConstraints { make in
-            make.height.equalTo(rowHeight)
+            make.height.equalTo(formRowHeight)
         }
 
         recurrenceCalendarRow.snp.makeConstraints { make in
@@ -439,11 +440,11 @@ final class AddEventViewController: UIViewController {
         }
 
         locationRow.snp.makeConstraints { make in
-            make.height.equalTo(rowHeight)
+            make.height.equalTo(formRowHeight)
         }
 
         urlRow.snp.makeConstraints { make in
-            make.height.equalTo(rowHeight)
+            make.height.equalTo(formRowHeight)
         }
 
         notesRow.snp.makeConstraints { make in
@@ -867,6 +868,7 @@ final class AddEventViewController: UIViewController {
         view.layoutIfNeeded()
 
         if shouldShow {
+            pickerStackTopConstraint?.update(offset: 8)
             if pickerStack.isHidden {
                 pickerStack.alpha = 0
                 pickerStack.isHidden = false
@@ -913,6 +915,7 @@ final class AddEventViewController: UIViewController {
                 endPickerContainer.isHidden = !endActive
             }
         } else {
+            pickerStackTopConstraint?.update(offset: 0)
             pickerStack.alpha = 0
             startPickerContainer.alpha = 0
             endPickerContainer.alpha = 0
@@ -966,18 +969,26 @@ final class AddEventViewController: UIViewController {
             self.allDayButton.backgroundColor = self.isAllDay ? UIColor.systemBlue : UIColor.clear
             self.allDayButton.layer.borderColor = (self.isAllDay ? UIColor.systemBlue : UIColor.separator).cgColor
             self.allDayButton.setTitleColor(self.isAllDay ? UIColor.white : UIColor.label, for: .normal)
-            self.startDateButton.showsTime = !self.isAllDay
-            self.endDateButton.showsTime = !self.isAllDay
             self.updateDateDisplays()
+            self.updateTimeRowHeightConstraint()
+            self.view.layoutIfNeeded()
         }
 
         if animated {
-            UIView.animate(withDuration: 0.2, animations: updateBlock)
+            view.layoutIfNeeded()
+            UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseInOut], animations: updateBlock)
         } else {
             updateBlock()
         }
 
         dismissPickers()
+    }
+
+    private func updateTimeRowHeightConstraint() {
+        let baseHeight = formRowHeight
+        let extraHeight = max(startDateButton.additionalContentHeight, endDateButton.additionalContentHeight)
+        let targetHeight = baseHeight + extraHeight
+        timeRowHeightConstraint?.update(offset: targetHeight)
     }
 
     private func updateDateDisplays() {
@@ -1348,6 +1359,11 @@ private final class DateSelectionButton: UIControl {
 
     var showsTime: Bool = true {
         didSet { timeLabel.isHidden = !showsTime }
+    }
+
+    var additionalContentHeight: CGFloat {
+        guard showsTime else { return 0 }
+        return timeLabel.font.lineHeight + container.spacing
     }
 
     var isHighlightedState: Bool = false {
