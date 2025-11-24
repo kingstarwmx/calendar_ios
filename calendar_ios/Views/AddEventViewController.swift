@@ -202,6 +202,18 @@ final class AddEventViewController: UIViewController {
         title = "新建日程"
         view.backgroundColor = .systemGroupedBackground
 
+        if #available(iOS 13.0, *) {
+            let appearance = UINavigationBarAppearance()
+            appearance.configureWithOpaqueBackground()
+            appearance.backgroundColor = .white
+            appearance.shadowColor = nil
+            navigationController?.navigationBar.standardAppearance = appearance
+            navigationController?.navigationBar.scrollEdgeAppearance = appearance
+        } else {
+            navigationController?.navigationBar.barTintColor = .white
+            navigationController?.navigationBar.isTranslucent = false
+        }
+
         let cancelItem = UIBarButtonItem(title: "取消", style: .plain, target: self, action: #selector(cancelTapped))
         let saveItem = UIBarButtonItem(title: "保存", style: .done, target: self, action: #selector(saveTapped))
         navigationItem.leftBarButtonItem = cancelItem
@@ -209,14 +221,19 @@ final class AddEventViewController: UIViewController {
     }
 
     private func configureViewHierarchy() {
+        view.backgroundColor = .white
+        
         scrollView.alwaysBounceVertical = true
         scrollView.keyboardDismissMode = .interactive
+        scrollView.backgroundColor = .white
 
         stackView.axis = .vertical
         stackView.spacing = 20
         stackView.isLayoutMarginsRelativeArrangement = true
         stackView.layoutMargins = UIEdgeInsets(top: 24, left: 0, bottom: 40, right: 0)
 
+        contentView.backgroundColor = .white
+        
         view.addSubview(scrollView)
         scrollView.addSubview(contentView)
         contentView.addSubview(stackView)
@@ -230,6 +247,7 @@ final class AddEventViewController: UIViewController {
             make.width.equalTo(scrollView.snp.width)
         }
 
+        stackView.backgroundColor = .white
         stackView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
@@ -250,6 +268,8 @@ final class AddEventViewController: UIViewController {
         titleField.delegate = self
 
         let titleContainer = UIView()
+        titleContainer.backgroundColor = .white
+        titleContainer.isOpaque = true
         titleContainer.addSubview(titleField)
         titleField.snp.makeConstraints { make in
             make.edges.equalToSuperview().inset(UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20))
@@ -273,6 +293,7 @@ final class AddEventViewController: UIViewController {
         formStack.alignment = .fill
         formStack.isLayoutMarginsRelativeArrangement = false
         stackView.addArrangedSubview(formStack)
+        stackView.setCustomSpacing(0, after: formStack)
     }
 
     private func configureTimeSection() {
@@ -417,12 +438,21 @@ final class AddEventViewController: UIViewController {
         repeatGroupStack.addArrangedSubview(recurrenceRow)
         repeatGroupStack.addArrangedSubview(recurrenceCalendarRow)
 
-        addFormRow(repeatGroupStack, horizontalInset: 0)
+        let repeatGroupContainer = addFormRow(repeatGroupStack, horizontalInset: 0)
+        repeatGroupContainer.layer.zPosition = -999
         addFormRow(reminderRow, horizontalInset: 0)
 
         addFormRow(locationRow)
         addFormRow(urlRow)
         addFormRow(notesRow, includeBottomSeparator: true)
+
+        let tailSpacer = UIView()
+        tailSpacer.backgroundColor = .white
+        tailSpacer.isOpaque = true
+        tailSpacer.snp.makeConstraints { make in
+            make.height.equalTo(250)
+        }
+        stackView.addArrangedSubview(tailSpacer)
 
         repeatRow.snp.makeConstraints { make in
             make.height.equalTo(formRowHeight)
@@ -475,12 +505,13 @@ final class AddEventViewController: UIViewController {
         calendarSelection.setSelected(components, animated: false)
     }
 
+    @discardableResult
     private func addFormRow(
         _ row: UIView,
         includeTopSeparator: Bool = false,
         includeBottomSeparator: Bool = true,
         horizontalInset: CGFloat = 20
-    ) {
+    ) -> FormRowContainer {
         let container = FormRowContainer(
             content: row,
             showTopSeparator: includeTopSeparator,
@@ -488,6 +519,7 @@ final class AddEventViewController: UIViewController {
             horizontalInset: horizontalInset
         )
         formStack.addArrangedSubview(container)
+        return container
     }
 
     private func configurePickers() {
@@ -621,7 +653,7 @@ final class AddEventViewController: UIViewController {
         case .infinite:
             return
         }
-        updateRecurrenceRowContent()
+        updateRecurrenceRowContent(animated: true)
     }
 
     private func recurrenceCountEditingDone() {
@@ -1057,10 +1089,9 @@ final class AddEventViewController: UIViewController {
                 isRecurrenceLabelSelected = false
                 recurrenceRow.endCountEditing()
             }
-            recurrenceCalendarRow.isHidden = recurrenceMode != .specificDate
             updateRecurrenceRowContent()
         } else {
-            recurrenceCalendarRow.isHidden = true
+            setRecurrenceCalendarVisibility(false, animated: animated)
             recurrenceMode = .infinite
             recurrenceLimitedCount = nil
             isRecurrenceLabelSelected = false
@@ -1111,17 +1142,17 @@ final class AddEventViewController: UIViewController {
         case .limitedCount:
             isRecurrenceLabelSelected = true
         }
-        updateRecurrenceRowContent()
+        updateRecurrenceRowContent(animated: true)
     }
 
-    private func updateRecurrenceRowContent() {
+    private func updateRecurrenceRowContent(animated: Bool = false) {
         guard !recurrenceRow.isHidden else { return }
         switch recurrenceMode {
         case .infinite:
             recurrenceRow.updateLabel(text: "无限重复")
             recurrenceRow.isLabelSelected = isRecurrenceLabelSelected
             recurrenceRow.endCountEditing()
-            recurrenceCalendarRow.isHidden = true
+            setRecurrenceCalendarVisibility(false, animated: animated)
             recurrenceRow.setLabelInteractionEnabled(false)
         case .specificDate:
             let date = recurrenceSelectedDate ?? creationDate
@@ -1129,7 +1160,7 @@ final class AddEventViewController: UIViewController {
             recurrenceRow.updateLabel(text: labelText)
             recurrenceRow.isLabelSelected = isRecurrenceLabelSelected
             recurrenceRow.endCountEditing()
-            recurrenceCalendarRow.isHidden = !isRecurrenceLabelSelected
+            setRecurrenceCalendarVisibility(isRecurrenceLabelSelected, animated: animated)
             recurrenceRow.setLabelInteractionEnabled(true)
             if isRecurrenceLabelSelected {
                 selectCalendarDate(date, animated: false)
@@ -1143,9 +1174,27 @@ final class AddEventViewController: UIViewController {
             } else {
                 recurrenceRow.endCountEditing()
             }
-            recurrenceCalendarRow.isHidden = true
+            setRecurrenceCalendarVisibility(false, animated: animated)
         }
         recurrenceRow.refreshMenu()
+    }
+
+    private func setRecurrenceCalendarVisibility(_ visible: Bool, animated: Bool) {
+        let shouldHide = !visible
+        guard recurrenceCalendarRow.isHidden != shouldHide else { return }
+
+        let duration: TimeInterval = 0.25
+        let changes = {
+            self.recurrenceCalendarRow.isHidden = shouldHide
+            self.view.layoutIfNeeded()
+        }
+
+        if animated {
+            view.layoutIfNeeded()
+            UIView.animate(withDuration: duration, delay: 0, options: [.curveEaseInOut], animations: changes)
+        } else {
+            changes()
+        }
     }
 
     private func selectCalendarDate(_ date: Date, animated: Bool) {
@@ -1356,7 +1405,7 @@ extension AddEventViewController: UICalendarSelectionSingleDateDelegate {
               let date = timeCalendar.date(from: dateComponents) else { return }
         recurrenceSelectedDate = date
         isRecurrenceLabelSelected = false
-        updateRecurrenceRowContent()
+        updateRecurrenceRowContent(animated: true)
     }
 
     func dateSelection(_ selection: UICalendarSelectionSingleDate, canSelectDate dateComponents: DateComponents?) -> Bool {
@@ -1509,6 +1558,8 @@ private final class RecurrenceRowView: UIControl {
     }
 
     private func setupViews() {
+        backgroundColor = UIColor.systemBackground
+        isOpaque = true
         let emptyView = UIView()
         
         recurrenceLabel.font = UIFont.systemFont(ofSize: 16)
@@ -1770,6 +1821,8 @@ private final class OptionRowView: UIControl {
             menuButton = UIButton(type: .system)
         }
         super.init(frame: .zero)
+        backgroundColor = UIColor.systemBackground
+        isOpaque = true
 
         iconView.image = UIImage(systemName: iconName)
         iconView.tintColor = .secondaryLabel
@@ -1924,6 +1977,8 @@ private final class FormRowContainer: UIView {
 
     init(content: UIView, showTopSeparator: Bool, showBottomSeparator: Bool, horizontalInset: CGFloat) {
         super.init(frame: .zero)
+        backgroundColor = UIColor.systemBackground
+        isOpaque = true
         topSeparator.backgroundColor = UIColor.separator
         bottomSeparator.backgroundColor = UIColor.separator
 
@@ -1962,6 +2017,8 @@ private final class IconTextFieldRow: UIView {
 
     init(iconName: String, placeholder: String) {
         super.init(frame: .zero)
+        backgroundColor = UIColor.systemBackground
+        isOpaque = true
 
         let iconView = UIImageView(image: UIImage(systemName: iconName))
         iconView.tintColor = .secondaryLabel
@@ -1998,6 +2055,8 @@ private final class NotesInputRow: UIView {
     init(iconName: String, placeholder: String) {
         textView = PlaceholderTextView()
         super.init(frame: .zero)
+        backgroundColor = UIColor.systemBackground
+        isOpaque = true
 
         let iconView = UIImageView(image: UIImage(systemName: iconName))
         iconView.tintColor = .secondaryLabel

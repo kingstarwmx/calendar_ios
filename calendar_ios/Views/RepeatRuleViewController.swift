@@ -118,6 +118,8 @@ final class RepeatRuleViewController: UIViewController {
     }
 
     private func configureLayout() {
+        view.backgroundColor = .white
+        
         scrollView.alwaysBounceVertical = true
 
         stackView.axis = .vertical
