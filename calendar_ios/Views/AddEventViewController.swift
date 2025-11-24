@@ -78,6 +78,7 @@ final class AddEventViewController: UIViewController {
     private let repeatGroupStack = UIStackView()
     private let repeatRow = OptionRowView(iconName: "repeat", placeholder: "无重复")
     private let recurrenceRow = RecurrenceRowView()
+    private var recurrenceRowHeightConstraint: Constraint?
     private let recurrenceCalendarRow = RecurrenceCalendarRow()
     private let reminderRow = OptionRowView(iconName: "bell", placeholder: "30分钟前")
     private let locationRow = IconTextFieldRow(iconName: "mappin.and.ellipse", placeholder: "位置")
@@ -428,8 +429,9 @@ final class AddEventViewController: UIViewController {
         }
 
         recurrenceRow.snp.makeConstraints { make in
-            make.height.equalTo(formRowHeight)
+            recurrenceRowHeightConstraint = make.height.equalTo(0).constraint
         }
+        recurrenceRow.alpha = 0
 
         reminderRow.snp.makeConstraints { make in
             make.height.equalTo(formRowHeight)
@@ -735,7 +737,7 @@ final class AddEventViewController: UIViewController {
             let action = UIAction(title: title, image: nil, identifier: nil) { [weak self] _ in
                 guard let self else { return }
                 self.selectedRepeatRule = rule
-                self.updateRepeatDisplay()
+                self.updateRepeatDisplay(animated: true)
             }
             if #available(iOS 15.0, *) {
                 action.state = rule == selectedRepeatRule ? .on : .off
@@ -771,7 +773,7 @@ final class AddEventViewController: UIViewController {
             let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
                 guard let self else { return }
                 self.selectedRepeatRule = option.1
-                self.updateRepeatDisplay()
+                self.updateRepeatDisplay(animated: true)
             }
             alert.addAction(action)
         }
@@ -1029,24 +1031,27 @@ final class AddEventViewController: UIViewController {
         }
     }
 
-    private func updateRepeatDisplay() {
+    private func updateRepeatDisplay(animated: Bool = false) {
         repeatRow.value = shortDescription(for: selectedRepeatRule)
         repeatRow.refreshMenu()
-        updateRecurrenceAvailability()
+        updateRecurrenceAvailability(animated: animated)
     }
 
     private func updateReminderDisplay() {
         reminderRow.value = selectedReminder.title
     }
 
-    private func updateRecurrenceAvailability() {
+    private func updateRecurrenceAvailability(animated: Bool = false) {
         let shouldShow = !selectedRepeatRule.isNone
         let wasHidden = recurrenceRow.isHidden
-        recurrenceRow.isHidden = !shouldShow
         recurrenceRow.isUserInteractionEnabled = shouldShow
 
         if shouldShow {
             if wasHidden {
+                recurrenceRow.alpha = 0
+                recurrenceRow.isHidden = false
+                recurrenceRowHeightConstraint?.update(offset: 0)
+                view.layoutIfNeeded()
                 recurrenceMode = .infinite
                 recurrenceLimitedCount = nil
                 isRecurrenceLabelSelected = false
@@ -1060,6 +1065,36 @@ final class AddEventViewController: UIViewController {
             recurrenceLimitedCount = nil
             isRecurrenceLabelSelected = false
             recurrenceRow.endCountEditing()
+        }
+
+        setRecurrenceRowVisibility(shouldShow, animated: animated, wasHidden: wasHidden)
+    }
+
+    private func setRecurrenceRowVisibility(_ visible: Bool, animated: Bool, wasHidden: Bool) {
+        let needsAnimation = (visible && wasHidden) || (!visible && !wasHidden)
+        let targetAlpha: CGFloat = visible ? 1 : 0
+        let targetHeight: CGFloat = visible ? formRowHeight : 0
+        let animate = animated && needsAnimation
+
+        let applyChanges = {
+            self.recurrenceRow.alpha = targetAlpha
+            self.recurrenceRowHeightConstraint?.update(offset: targetHeight)
+            self.view.layoutIfNeeded()
+        }
+
+        if animate {
+            if visible {
+                recurrenceRow.isHidden = false
+            }
+            view.layoutIfNeeded()
+            UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseInOut], animations: applyChanges) { _ in
+                self.recurrenceRow.isHidden = !visible
+            }
+        } else {
+            recurrenceRow.alpha = targetAlpha
+            recurrenceRowHeightConstraint?.update(offset: targetHeight)
+            recurrenceRow.isHidden = !visible
+            view.layoutIfNeeded()
         }
     }
 
@@ -1262,7 +1297,7 @@ final class AddEventViewController: UIViewController {
         controller.onRuleChange = { [weak self] rule in
             guard let self else { return }
             self.selectedRepeatRule = rule
-            self.updateRepeatDisplay()
+            self.updateRepeatDisplay(animated: true)
         }
         navigationController?.pushViewController(controller, animated: true)
     }
