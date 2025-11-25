@@ -407,7 +407,7 @@ final class AddEventViewController: UIViewController {
         }
         repeatRow.addTarget(self, action: #selector(repeatTapped), for: .touchUpInside)
 
-        repeatRow.accessoryImage = UIImage(systemName: "chevron.up.chevron.down")
+        repeatRow.showsAccessory = true
 
         if #available(iOS 14.0, *) {
             recurrenceRow.menuProvider = { [weak self] in
@@ -456,6 +456,7 @@ final class AddEventViewController: UIViewController {
 
         repeatRow.snp.makeConstraints { make in
             make.height.equalTo(formRowHeight)
+            make.leading.trailing.equalToSuperview()
         }
 
         recurrenceRow.snp.makeConstraints { make in
@@ -469,6 +470,8 @@ final class AddEventViewController: UIViewController {
 
         recurrenceCalendarRow.snp.makeConstraints { make in
             make.height.greaterThanOrEqualTo(320)
+            make.leading.equalToSuperview().offset(20)
+            make.trailing.equalToSuperview().offset(-20)
         }
 
         locationRow.snp.makeConstraints { make in
@@ -1466,8 +1469,8 @@ private final class DateSelectionButton: UIControl {
 
     private func setup() {
         layer.cornerRadius = 12
-        layer.borderWidth = 1
-        layer.borderColor = UIColor.clear.cgColor
+//        layer.borderWidth = 1
+//        layer.borderColor = UIColor.clear.cgColor
 
         container.axis = .vertical
         container.alignment = .center
@@ -1585,7 +1588,7 @@ private final class RecurrenceRowView: UIControl {
         toolbar.items = [flexSpace, doneButton]
         countTextField.inputAccessoryView = toolbar
         
-        labelBgView.layer.cornerRadius = 4
+        labelBgView.layer.cornerRadius = 6
         labelBgView.layer.masksToBounds = true
         labelBgView.isUserInteractionEnabled = false
         
@@ -1778,7 +1781,7 @@ private final class RecurrenceCalendarRow: UIView {
         
         addSubview(calendarView)
         calendarView.snp.makeConstraints { make in
-            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12))
+            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 0, left: 5, bottom: 0, right: 5))
         }
     }
 
@@ -1790,7 +1793,6 @@ private final class RecurrenceCalendarRow: UIView {
 private final class OptionRowView: UIControl {
     private let iconView = UIImageView()
     private let valueLabel = UILabel()
-    private let spacer = UIView()
     private let accessoryImageView = UIImageView()
     private let menuButton: UIButton
     private var storedMenuProvider: (() -> UIMenu)?
@@ -1800,10 +1802,9 @@ private final class OptionRowView: UIControl {
         set { valueLabel.text = newValue }
     }
 
-    var accessoryImage: UIImage? {
+    var showsAccessory: Bool = false {
         didSet {
-            accessoryImageView.image = accessoryImage
-            accessoryImageView.isHidden = accessoryImage == nil
+            accessoryImageView.isHidden = !showsAccessory
         }
     }
 
@@ -1831,33 +1832,33 @@ private final class OptionRowView: UIControl {
         valueLabel.font = UIFont.systemFont(ofSize: 16)
         valueLabel.textColor = UIColor.label
 
+        accessoryImageView.image = UIImage(systemName: "chevron.up.chevron.down")
         accessoryImageView.tintColor = .gray
         accessoryImageView.isHidden = true
         accessoryImageView.contentMode = .scaleAspectFit
         accessoryImageView.isUserInteractionEnabled = false
-        
-        
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        let stack = UIStackView(arrangedSubviews: [iconView, valueLabel, spacer, accessoryImageView])
-        stack.axis = .horizontal
-        stack.alignment = .center
-        stack.spacing = 16
-        stack.isUserInteractionEnabled = false
-
-        addSubview(stack)
-        stack.snp.makeConstraints { make in
-            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20))
-        }
+        addSubview(iconView)
+        addSubview(valueLabel)
+        addSubview(accessoryImageView)
 
         iconView.snp.makeConstraints { make in
+            make.leading.equalToSuperview().offset(20)
+            make.centerY.equalToSuperview()
             make.width.height.equalTo(iconSize)
         }
 
         accessoryImageView.snp.makeConstraints { make in
+            make.trailing.equalToSuperview().offset(-20)
+            make.centerY.equalToSuperview()
             make.width.equalTo(21)
             make.height.equalTo(21)
+        }
+
+        valueLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        valueLabel.snp.makeConstraints { make in
+            make.leading.equalTo(iconView.snp.trailing).offset(16)
+            make.trailing.lessThanOrEqualTo(accessoryImageView.snp.leading).offset(-16)
+            make.centerY.equalToSuperview()
         }
 
         menuButton.setTitle(nil, for: .normal)
