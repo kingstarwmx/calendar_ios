@@ -27,22 +27,27 @@ final class AddEventViewController: UIViewController {
         case limitedCount
     }
 
-    private struct ReminderOption: Equatable {
+    struct ReminderOption: Equatable {
+        let id: String
         let title: String
         let offset: TimeInterval?
+
+        var isNone: Bool { id == "none" }
     }
 
     private static func buildReminderOptions(_ locale: Locale) -> [ReminderOption] {
         [
-            ReminderOption(title: "不提醒", offset: nil),
-            ReminderOption(title: "开始时", offset: 0),
-            ReminderOption(title: "5分钟前", offset: 5 * 60),
-            ReminderOption(title: "10分钟前", offset: 10 * 60),
-            ReminderOption(title: "15分钟前", offset: 15 * 60),
-            ReminderOption(title: "30分钟前", offset: 30 * 60),
-            ReminderOption(title: "1小时前", offset: 60 * 60),
-            ReminderOption(title: "2小时前", offset: 2 * 60 * 60),
-            ReminderOption(title: "1天前", offset: 24 * 60 * 60)
+            ReminderOption(id: "none", title: "无", offset: nil),
+            ReminderOption(id: "start", title: "日程开始时", offset: 0),
+            ReminderOption(id: "5m", title: "5分钟前", offset: 5 * 60),
+            ReminderOption(id: "10m", title: "10分钟前", offset: 10 * 60),
+            ReminderOption(id: "15m", title: "15分钟前", offset: 15 * 60),
+            ReminderOption(id: "30m", title: "30分钟前", offset: 30 * 60),
+            ReminderOption(id: "1h", title: "1小时前", offset: 60 * 60),
+            ReminderOption(id: "2h", title: "2小时前", offset: 2 * 60 * 60),
+            ReminderOption(id: "1d", title: "1天前", offset: 24 * 60 * 60),
+            ReminderOption(id: "2d", title: "2天前", offset: 2 * 24 * 60 * 60),
+            ReminderOption(id: "1w", title: "1周前", offset: 7 * 24 * 60 * 60)
         ]
     }
 
@@ -104,7 +109,7 @@ final class AddEventViewController: UIViewController {
     private var recurrenceSelectedDate: Date?
     private var recurrenceLimitedCount: Int?
     private var isRecurrenceLabelSelected = false
-    private var selectedReminder = ReminderOption(title: "", offset: 30 * 60)
+    private var selectedReminders: [ReminderOption] = []
     private var calendarSelection: UICalendarSelectionSingleDate?
 
     private let baseLanguageIdentifier: String = Locale.preferredLanguages.first ?? Locale.autoupdatingCurrent.identifier
@@ -186,9 +191,9 @@ final class AddEventViewController: UIViewController {
         recurrenceSelectedDate = creationDate
         configureRecurrenceCalendar()
         if let defaultReminder = reminderOptions.first(where: { $0.offset == 30 * 60 }) {
-            selectedReminder = defaultReminder
+            selectedReminders = [defaultReminder]
         } else if let first = reminderOptions.first {
-            selectedReminder = first
+            selectedReminders = [first]
         }
         updateAllDayState(animated: false)
         updateDateDisplays()
@@ -410,6 +415,16 @@ final class AddEventViewController: UIViewController {
         repeatRow.showsAccessory = true
 
         if #available(iOS 14.0, *) {
+            reminderRow.menuProvider = { [weak self] in
+                self?.makeReminderMenu() ?? UIMenu(title: "", children: [])
+            }
+        } else {
+            reminderRow.menuProvider = nil
+        }
+        reminderRow.addTarget(self, action: #selector(reminderTapped), for: .touchUpInside)
+        reminderRow.showsAccessory = true
+
+        if #available(iOS 14.0, *) {
             recurrenceRow.menuProvider = { [weak self] in
                 self?.makeRecurrenceMenu() ?? UIMenu(title: "", children: [])
             }
@@ -450,7 +465,7 @@ final class AddEventViewController: UIViewController {
         tailSpacer.backgroundColor = .white
         tailSpacer.isOpaque = true
         tailSpacer.snp.makeConstraints { make in
-            make.height.equalTo(250)
+            make.height.equalTo(450)
         }
         stackView.addArrangedSubview(tailSpacer)
 
@@ -558,10 +573,10 @@ final class AddEventViewController: UIViewController {
             endDate = calendar.startOfDay(for: endDate)
         }
 
-        let reminders = selectedReminder.offset.flatMap { offset -> [Date] in
-            let reminderDate = startDate.addingTimeInterval(-offset)
-            return [reminderDate]
-        } ?? []
+        let reminders = selectedReminders.compactMap { option -> Date? in
+            guard let offset = option.offset else { return nil }
+            return startDate.addingTimeInterval(-offset)
+        }.sorted()
 
         let resolvedRepeatRule = resolvedRepeatRule()
         if !selectedRepeatRule.isNone && resolvedRepeatRule == nil {
@@ -684,29 +699,11 @@ final class AddEventViewController: UIViewController {
         view.endEditing(true)
         dismissPickers()
 
-        let alert = UIAlertController(title: "提醒", message: nil, preferredStyle: .actionSheet)
-
-        reminderOptions.forEach { option in
-            var title = option.title
-            if option == selectedReminder {
-                title = "✓ " + title
-            }
-            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
-                guard let self else { return }
-                self.selectedReminder = option
-                self.updateReminderDisplay()
-            }
-            alert.addAction(action)
+        if #available(iOS 14.0, *) {
+            reminderRow.showMenu()
+        } else {
+            presentLegacyReminderSheet()
         }
-
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-
-        if let popover = alert.popoverPresentationController {
-            popover.sourceView = reminderRow
-            popover.sourceRect = reminderRow.bounds
-        }
-
-        present(alert, animated: true)
     }
 
     @available(iOS 14.0, *)
@@ -753,6 +750,63 @@ final class AddEventViewController: UIViewController {
         }
 
         present(alert, animated: true)
+    }
+
+    @available(iOS 14.0, *)
+    private func makeReminderMenu() -> UIMenu? {
+        let selectedIds = Set(selectedReminders.map { $0.id })
+        let actions = reminderOptions.map { option -> UIAction in
+            let isSelected = selectedIds.contains(option.id)
+            let action = UIAction(title: option.title) { [weak self] _ in
+                self?.handleReminderOptionSelection(option)
+            }
+            if #available(iOS 15.0, *) {
+                action.state = isSelected ? .on : .off
+            }
+            return action
+        }
+        let customAction = UIAction(title: "自定义…") { [weak self] _ in
+            self?.presentCustomReminderController()
+        }
+        return UIMenu(title: "", children: actions + [customAction])
+    }
+
+    private func presentLegacyReminderSheet() {
+        let alert = UIAlertController(title: "提醒", message: nil, preferredStyle: .actionSheet)
+        let selectedIds = Set(selectedReminders.map { $0.id })
+        reminderOptions.forEach { option in
+            var title = option.title
+            if selectedIds.contains(option.id) {
+                title = "✓ " + title
+            }
+            alert.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
+                self?.handleReminderOptionSelection(option)
+            })
+        }
+
+        alert.addAction(UIAlertAction(title: "自定义…", style: .default) { [weak self] _ in
+            self?.presentCustomReminderController()
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = reminderRow
+            popover.sourceRect = reminderRow.bounds
+        }
+
+        present(alert, animated: true)
+    }
+
+    private func handleReminderOptionSelection(_ option: ReminderOption) {
+        applyReminderSelection([option])
+    }
+
+    private func presentCustomReminderController() {
+        let controller = ReminderSelectionViewController(options: reminderOptions, initialSelection: selectedReminders)
+        controller.onSelectionConfirm = { [weak self] newSelection in
+            self?.applyReminderSelection(newSelection)
+        }
+        navigationController?.pushViewController(controller, animated: true)
     }
 
     @available(iOS 14.0, *)
@@ -1073,7 +1127,44 @@ final class AddEventViewController: UIViewController {
     }
 
     private func updateReminderDisplay() {
-        reminderRow.value = selectedReminder.title
+        guard !selectedReminders.isEmpty else {
+            reminderRow.value = "无"
+            return
+        }
+        if selectedReminders.count == 1, let first = selectedReminders.first {
+            reminderRow.value = first.title
+        } else {
+            let titles = selectedReminders.map { $0.title }
+            reminderRow.value = titles.joined(separator: "，")
+        }
+        reminderRow.refreshMenu()
+    }
+
+    private func applyReminderSelection(_ selection: [ReminderOption]) {
+        selectedReminders = normalizedReminderSelection(selection)
+        updateReminderDisplay()
+    }
+
+    private func normalizedReminderSelection(_ selection: [ReminderOption]) -> [ReminderOption] {
+        guard let noneOption = reminderOptions.first(where: { $0.isNone }) else {
+            return orderedUniqueSelection(selection)
+        }
+        if selection.isEmpty || selection.contains(where: { $0.isNone }) {
+            return [noneOption]
+        }
+        return orderedUniqueSelection(selection)
+    }
+
+    private func orderedUniqueSelection(_ selection: [ReminderOption]) -> [ReminderOption] {
+        if selection.isEmpty { return [] }
+        var uniqueIds: [String] = []
+        selection.forEach { option in
+            if !uniqueIds.contains(option.id) {
+                uniqueIds.append(option.id)
+            }
+        }
+        let idSet = Set(uniqueIds)
+        return reminderOptions.filter { idSet.contains($0.id) }
     }
 
     private func updateRecurrenceAvailability(animated: Bool = false) {
@@ -1781,7 +1872,7 @@ private final class RecurrenceCalendarRow: UIView {
         
         addSubview(calendarView)
         calendarView.snp.makeConstraints { make in
-            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 0, left: 5, bottom: 0, right: 5))
+            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12))
         }
     }
 
