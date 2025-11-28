@@ -1761,7 +1761,7 @@ private final class RecurrenceRowView: UIControl {
         alignmentSpacer.snp.makeConstraints { make in
             make.leading.equalTo(layoutMarginsGuide.snp.leading)
             make.centerY.equalToSuperview()
-            make.width.equalTo(iconSize + 15)
+            make.width.equalTo(iconSize + 7)
         }
 
         labelContainer.snp.makeConstraints { make in
@@ -2277,7 +2277,7 @@ private final class NotesInputRow: UIView {
         super.init(frame: .zero)
         backgroundColor = UIColor.systemBackground
         isOpaque = true
-        layoutMargins = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
+        layoutMargins = UIEdgeInsets(top: 20, left: 20, bottom: 0, right: 20)
 
         let iconView = UIImageView(image: UIImage(systemName: iconName))
         iconView.tintColor = .secondaryLabel
