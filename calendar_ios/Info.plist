@@ -4,6 +4,8 @@
 <dict>
 	<key>NSCalendarsUsageDescription</key>
 	<string>此应用需要访问您的日历来同步和管理日程事件</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>为了快速填写地点，我们需要访问您的当前位置</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

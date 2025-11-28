@@ -65,7 +65,7 @@ final class AddEventViewController: UIViewController {
     private let clockIconView = UIImageView(image: UIImage(systemName: "clock"))
     private let startDateButton = DateSelectionButton()
     private let endDateButton = DateSelectionButton()
-    private let arrowView = UIImageView(image: UIImage(systemName: "arrow.forward"))
+    private let arrowView = UIImageView(image: UIImage(named: "time_arrow")?.withRenderingMode(.alwaysTemplate))
     private let allDayButton = UIButton(type: .system)
 
     private let pickerStack = UIStackView()
@@ -86,7 +86,7 @@ final class AddEventViewController: UIViewController {
     private var recurrenceRowHeightConstraint: Constraint?
     private let recurrenceCalendarRow = RecurrenceCalendarRow()
     private let reminderRow = OptionRowView(iconName: "bell", placeholder: "30分钟前")
-    private let locationRow = IconTextFieldRow(iconName: "mappin.and.ellipse", placeholder: "位置")
+    private let locationRow = LocationSelectionRow(iconName: "mappin.and.ellipse", placeholder: "添加地点")
     private let urlRow = IconTextFieldRow(iconName: "link", placeholder: "URL")
     private let notesRow = NotesInputRow(iconName: "text.alignleft", placeholder: "备注")
     private lazy var backgroundTapGesture: UITapGestureRecognizer = {
@@ -111,6 +111,7 @@ final class AddEventViewController: UIViewController {
     private var isRecurrenceLabelSelected = false
     private var selectedReminders: [ReminderOption] = []
     private var calendarSelection: UICalendarSelectionSingleDate?
+    private var selectedLocation: LocationSelection?
 
     private let baseLanguageIdentifier: String = Locale.preferredLanguages.first ?? Locale.autoupdatingCurrent.identifier
 
@@ -308,7 +309,7 @@ final class AddEventViewController: UIViewController {
         clockIconView.tintColor = .gray
         clockIconView.contentMode = .scaleAspectFit
 
-        arrowView.tintColor = .gray
+        arrowView.tintColor = .label
         arrowView.contentMode = .scaleAspectFit
 
         allDayButton.setTitle("全天", for: .normal)
@@ -330,7 +331,8 @@ final class AddEventViewController: UIViewController {
         timeRow.addArrangedSubview(startDateButton)
         timeRow.addArrangedSubview(arrowView)
         arrowView.snp.makeConstraints { make in
-            make.width.height.equalTo(iconSize)
+            make.width.equalTo(11)
+            make.height.equalTo(22)
         }
         timeRow.addArrangedSubview(endDateButton)
         timeRow.addArrangedSubview(allDayButton)
@@ -348,7 +350,9 @@ final class AddEventViewController: UIViewController {
 
         timeSection.addSubview(timeRow)
         timeRow.snp.makeConstraints { make in
-            make.top.leading.trailing.equalToSuperview()
+            make.top.trailing.equalToSuperview()
+            make.leading.equalToSuperview().offset(20)
+            make.trailing.equalToSuperview().offset(-10)
             timeRowHeightConstraint = make.height.equalTo(formRowHeight).constraint
         }
 
@@ -490,8 +494,10 @@ final class AddEventViewController: UIViewController {
         }
 
         locationRow.snp.makeConstraints { make in
-            make.height.equalTo(formRowHeight)
+            make.height.greaterThanOrEqualTo(formRowHeight)
         }
+        locationRow.addTarget(self, action: #selector(locationRowTapped), for: .touchUpInside)
+        locationRow.addTarget(self, action: #selector(locationRowClearTapped), for: .primaryActionTriggered)
 
         urlRow.snp.makeConstraints { make in
             make.height.equalTo(formRowHeight)
@@ -504,7 +510,6 @@ final class AddEventViewController: UIViewController {
         recurrenceRow.countTextField.delegate = self
         recurrenceRow.countTextField.addTarget(self, action: #selector(limitCountEditingChanged(_:)), for: .editingChanged)
 
-        locationRow.textField.delegate = self
         urlRow.textField.delegate = self
         notesRow.textView.delegate = self
     }
@@ -592,7 +597,7 @@ final class AddEventViewController: UIViewController {
             }
         }
 
-        let locationText = locationRow.textField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let locationText = selectedLocation?.combinedDescription ?? ""
         let urlText = urlRow.textField.text?.trimmingCharacters(in: .whitespacesAndNewlines)
         let descriptionText = notesRow.textView.text.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -656,6 +661,26 @@ final class AddEventViewController: UIViewController {
         } else {
             presentLegacyRecurrenceSheet()
         }
+    }
+
+    @objc private func locationRowTapped() {
+        view.endEditing(true)
+        dismissPickers()
+        let controller = LocationSelectViewController()
+        controller.initialSelection = selectedLocation
+        controller.onLocationSelected = { [weak self] selection in
+            self?.applyLocationSelection(selection)
+        }
+        navigationController?.pushViewController(controller, animated: true)
+    }
+
+    @objc private func locationRowClearTapped() {
+        applyLocationSelection(nil)
+    }
+
+    private func applyLocationSelection(_ selection: LocationSelection?) {
+        selectedLocation = selection
+        locationRow.update(with: selection)
     }
 
     @objc private func recurrenceLabelTapped() {
@@ -1654,6 +1679,7 @@ private final class RecurrenceRowView: UIControl {
     private func setupViews() {
         backgroundColor = UIColor.systemBackground
         isOpaque = true
+        layoutMargins = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
         let emptyView = UIView()
         
         recurrenceLabel.font = UIFont.systemFont(ofSize: 16)
@@ -1733,23 +1759,24 @@ private final class RecurrenceRowView: UIControl {
             make.height.equalTo(35)
         }
         alignmentSpacer.snp.makeConstraints { make in
-            make.leading.equalToSuperview()
+            make.leading.equalTo(layoutMarginsGuide.snp.leading)
             make.centerY.equalToSuperview()
             make.width.equalTo(iconSize + 15)
         }
 
         labelContainer.snp.makeConstraints { make in
-            make.leading.equalTo(alignmentSpacer.snp.trailing).offset(14)
+            make.leading.equalTo(alignmentSpacer.snp.trailing).offset(0)
             make.centerY.equalToSuperview()
             make.top.bottom.equalToSuperview()
         }
         emptyView.snp.makeConstraints { make in
-            make.leading.top.bottom.equalToSuperview()
+            make.leading.equalTo(layoutMarginsGuide.snp.leading)
+            make.top.bottom.equalToSuperview()
             make.trailing.equalTo(labelContainer.snp.leading)
         }
 
         accessoryImageView.snp.makeConstraints { make in
-            make.trailing.equalToSuperview().offset(-20)
+            make.trailing.equalTo(layoutMarginsGuide.snp.trailing)
             make.leading.greaterThanOrEqualTo(labelContainer.snp.trailing).offset(16)
             make.centerY.equalToSuperview()
             make.width.equalTo(21)
@@ -1868,11 +1895,11 @@ private final class RecurrenceCalendarRow: UIView {
         backgroundColor = UIColor.secondarySystemBackground
         layer.cornerRadius = 12
         layer.masksToBounds = true
+        layoutMargins = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
 
-        
         addSubview(calendarView)
         calendarView.snp.makeConstraints { make in
-            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12))
+            make.edges.equalTo(layoutMarginsGuide).inset(UIEdgeInsets(top: 8, left: 0, bottom: 8, right: 0))
         }
     }
 
@@ -1915,6 +1942,7 @@ private final class OptionRowView: UIControl {
         super.init(frame: .zero)
         backgroundColor = UIColor.systemBackground
         isOpaque = true
+        layoutMargins = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
 
         iconView.image = UIImage(systemName: iconName)
         iconView.tintColor = .secondaryLabel
@@ -1933,13 +1961,13 @@ private final class OptionRowView: UIControl {
         addSubview(accessoryImageView)
 
         iconView.snp.makeConstraints { make in
-            make.leading.equalToSuperview().offset(20)
+            make.leading.equalTo(layoutMarginsGuide.snp.leading)
             make.centerY.equalToSuperview()
             make.width.height.equalTo(iconSize)
         }
 
         accessoryImageView.snp.makeConstraints { make in
-            make.trailing.equalToSuperview().offset(-20)
+            make.trailing.equalTo(layoutMarginsGuide.snp.trailing)
             make.centerY.equalToSuperview()
             make.width.equalTo(21)
             make.height.equalTo(21)
@@ -2093,7 +2121,7 @@ private final class FormRowContainer: UIView {
         }
 
         content.snp.makeConstraints { make in
-            make.leading.trailing.equalToSuperview().inset(horizontalInset)
+            make.leading.trailing.equalToSuperview()
             make.top.equalTo(topSeparator.snp.bottom)
             make.bottom.equalTo(bottomSeparator.snp.top)
         }
@@ -2111,6 +2139,7 @@ private final class IconTextFieldRow: UIView {
         super.init(frame: .zero)
         backgroundColor = UIColor.systemBackground
         isOpaque = true
+        layoutMargins = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
 
         let iconView = UIImageView(image: UIImage(systemName: iconName))
         iconView.tintColor = .secondaryLabel
@@ -2128,7 +2157,7 @@ private final class IconTextFieldRow: UIView {
 
         addSubview(stack)
         stack.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            make.edges.equalTo(layoutMarginsGuide)
         }
 
         iconView.snp.makeConstraints { make in
@@ -2141,6 +2170,105 @@ private final class IconTextFieldRow: UIView {
     }
 }
 
+private final class LocationSelectionRow: UIControl {
+    private let iconView = UIImageView()
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let clearButton = UIButton(type: .system)
+    private let placeholderText: String
+
+    init(iconName: String, placeholder: String) {
+        self.placeholderText = placeholder
+        super.init(frame: .zero)
+        backgroundColor = UIColor.systemBackground
+        isOpaque = true
+        layoutMargins = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
+
+        iconView.image = UIImage(systemName: iconName)
+        iconView.tintColor = .secondaryLabel
+        iconView.contentMode = .scaleAspectFit
+
+        titleLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        titleLabel.textColor = UIColor.placeholderText
+        titleLabel.numberOfLines = 2
+
+        subtitleLabel.font = UIFont.systemFont(ofSize: 13)
+        subtitleLabel.textColor = UIColor.secondaryLabel
+        subtitleLabel.numberOfLines = 2
+        subtitleLabel.isHidden = true
+
+        clearButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
+        clearButton.tintColor = UIColor.secondaryLabel
+        clearButton.isHidden = true
+        clearButton.addTarget(self, action: #selector(clearTapped), for: .touchUpInside)
+        clearButton.setContentHuggingPriority(.required, for: .horizontal)
+        clearButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 2
+
+        let stack = UIStackView(arrangedSubviews: [iconView, textStack, clearButton])
+        stack.axis = .horizontal
+        stack.alignment = .center
+        stack.spacing = 16
+
+        addSubview(stack)
+        stack.snp.makeConstraints { make in
+            make.edges.equalTo(layoutMarginsGuide)
+        }
+
+        iconView.snp.makeConstraints { make in
+            make.width.height.equalTo(iconSize)
+        }
+
+        update(with: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(with selection: LocationSelection?) {
+        if let selection {
+            titleLabel.text = selection.title
+            titleLabel.textColor = UIColor.label
+            if selection.subtitle.isEmpty {
+                subtitleLabel.isHidden = true
+                subtitleLabel.text = nil
+            } else {
+                subtitleLabel.isHidden = false
+                subtitleLabel.text = selection.subtitle
+            }
+            clearButton.isHidden = false
+        } else {
+            titleLabel.text = placeholderText
+            titleLabel.textColor = UIColor.placeholderText
+            subtitleLabel.text = nil
+            subtitleLabel.isHidden = true
+            clearButton.isHidden = true
+        }
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard let hitView = super.hitTest(point, with: event) else { return nil }
+        if hitView === clearButton || hitView.isDescendant(of: clearButton) {
+            return hitView
+        }
+        return self
+    }
+
+    @objc private func clearTapped() {
+        sendActions(for: .primaryActionTriggered)
+    }
+
+    override var isHighlighted: Bool {
+        didSet {
+            backgroundColor = isHighlighted ? UIColor.systemGray5 : UIColor.systemBackground
+        }
+    }
+}
+
 private final class NotesInputRow: UIView {
     let textView: PlaceholderTextView
 
@@ -2149,6 +2277,7 @@ private final class NotesInputRow: UIView {
         super.init(frame: .zero)
         backgroundColor = UIColor.systemBackground
         isOpaque = true
+        layoutMargins = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
 
         let iconView = UIImageView(image: UIImage(systemName: iconName))
         iconView.tintColor = .secondaryLabel
@@ -2172,7 +2301,7 @@ private final class NotesInputRow: UIView {
 
         addSubview(stack)
         stack.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            make.edges.equalTo(layoutMarginsGuide)
         }
     }
 
