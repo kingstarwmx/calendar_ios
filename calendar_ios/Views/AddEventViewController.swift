@@ -112,6 +112,8 @@ final class AddEventViewController: UIViewController {
     private var selectedReminders: [ReminderOption] = []
     private var calendarSelection: UICalendarSelectionSingleDate?
     private var selectedLocation: LocationSelection?
+    private var keyboardVisibleInset: CGFloat = 0
+    private var notesOriginalContentOffset: CGPoint?
 
     private let baseLanguageIdentifier: String = Locale.preferredLanguages.first ?? Locale.autoupdatingCurrent.identifier
 
@@ -189,6 +191,7 @@ final class AddEventViewController: UIViewController {
         configureViewHierarchy()
         configurePickers()
         configureActions()
+        configureKeyboardNotifications()
         recurrenceSelectedDate = creationDate
         configureRecurrenceCalendar()
         if let defaultReminder = reminderOptions.first(where: { $0.offset == 30 * 60 }) {
@@ -554,6 +557,15 @@ final class AddEventViewController: UIViewController {
 
     private func configureActions() {
         view.addGestureRecognizer(backgroundTapGesture)
+    }
+
+    private func configureKeyboardNotifications() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleKeyboardWillChangeFrame(_:)),
+            name: UIResponder.keyboardWillChangeFrameNotification,
+            object: nil
+        )
     }
 
     // MARK: - Actions
@@ -1469,6 +1481,10 @@ final class AddEventViewController: UIViewController {
         }
         navigationController?.pushViewController(controller, animated: true)
     }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
 }
 
 // MARK: - UITextFieldDelegate & UITextViewDelegate
@@ -1509,6 +1525,12 @@ extension AddEventViewController: UITextFieldDelegate, UITextViewDelegate {
 
     func textViewDidBeginEditing(_ textView: UITextView) {
         dismissPickers()
+        if textView === notesRow.textView {
+            if notesOriginalContentOffset == nil {
+                notesOriginalContentOffset = scrollView.contentOffset
+            }
+            scrollNotesRowIntoView(animated: true)
+        }
     }
 
     func textViewDidChange(_ textView: UITextView) {
@@ -1549,6 +1571,55 @@ extension AddEventViewController: UIGestureRecognizerDelegate {
             view = current.superview
         }
         return true
+    }
+}
+
+// MARK: - Keyboard Handling
+
+private extension AddEventViewController {
+    @objc func handleKeyboardWillChangeFrame(_ notification: Notification) {
+        guard
+            let userInfo = notification.userInfo,
+            let duration = (userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue,
+            let curveRaw = (userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?.uintValue,
+            let endFrameValue = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue
+        else { return }
+
+        let endFrame = view.convert(endFrameValue.cgRectValue, from: nil)
+        let safeFrame = view.safeAreaLayoutGuide.layoutFrame
+        let overlap = max(safeFrame.maxY - endFrame.origin.y, 0)
+
+        applyKeyboardInset(overlap, duration: duration, curve: UIView.AnimationOptions(rawValue: curveRaw << 16))
+    }
+
+    func applyKeyboardInset(_ inset: CGFloat, duration: TimeInterval, curve: UIView.AnimationOptions) {
+        guard keyboardVisibleInset != inset else {
+            if inset > 0, notesRow.textView.isFirstResponder {
+                scrollNotesRowIntoView(animated: true)
+            }
+            return
+        }
+        keyboardVisibleInset = inset
+        UIView.animate(withDuration: duration, delay: 0, options: [curve, .beginFromCurrentState], animations: {
+            self.scrollView.contentInset.bottom = inset
+            self.scrollView.scrollIndicatorInsets.bottom = inset
+            if inset > 0, self.notesRow.textView.isFirstResponder {
+                self.scrollNotesRowIntoView(animated: false)
+            } else if inset == 0 {
+                self.restoreNotesRowPositionIfNeeded()
+            }
+        })
+    }
+
+    func scrollNotesRowIntoView(animated: Bool) {
+        let rowRectInScrollView = notesRow.convert(notesRow.bounds, to: scrollView)
+        scrollView.scrollRectToVisible(rowRectInScrollView.insetBy(dx: 0, dy: -12), animated: animated)
+    }
+
+    func restoreNotesRowPositionIfNeeded() {
+        guard let originalOffset = notesOriginalContentOffset else { return }
+        notesOriginalContentOffset = nil
+        scrollView.contentOffset = originalOffset
     }
 }
 
