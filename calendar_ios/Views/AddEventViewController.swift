@@ -1,5 +1,6 @@
 import UIKit
 import SnapKit
+import EventKit
 let iconSize: CGFloat = 23
 /// 新建事件页面，参考 Flutter 端 `add_event_screen.dart` 的布局和交互
 final class AddEventViewController: UIViewController {
@@ -86,6 +87,7 @@ final class AddEventViewController: UIViewController {
     private var recurrenceRowHeightConstraint: Constraint?
     private let recurrenceCalendarRow = RecurrenceCalendarRow()
     private let reminderRow = OptionRowView(iconName: "bell", placeholder: "30分钟前")
+    private let calendarRow = CalendarOptionRowView(iconName: "calendar", placeholder: "选择日历")
     private let locationRow = LocationSelectionRow(iconName: "mappin.and.ellipse", placeholder: "添加地点")
     private let urlRow = IconTextFieldRow(iconName: "link", placeholder: "URL")
     private let notesRow = NotesInputRow(iconName: "text.alignleft", placeholder: "备注")
@@ -110,6 +112,12 @@ final class AddEventViewController: UIViewController {
     private var recurrenceLimitedCount: Int?
     private var isRecurrenceLabelSelected = false
     private var selectedReminders: [ReminderOption] = []
+    private var availableCalendars: [EKCalendarSummary] = []
+    private var selectedCalendar: EKCalendarSummary?
+    private var isLoadingCalendars = false
+    private var calendarLoadErrorMessage: String?
+    private let lastCalendarSelectionKey = "AddEventViewController.lastCalendarIdentifier"
+    private let calendarService = CalendarService()
     private var calendarSelection: UICalendarSelectionSingleDate?
     private var selectedLocation: LocationSelection?
     private var keyboardVisibleInset: CGFloat = 0
@@ -203,6 +211,8 @@ final class AddEventViewController: UIViewController {
         updateDateDisplays()
         updateRepeatDisplay()
         updateReminderDisplay()
+        updateCalendarRowDisplay()
+        loadCalendarOptions()
     }
 
     // MARK: - Setup
@@ -432,6 +442,16 @@ final class AddEventViewController: UIViewController {
         reminderRow.showsAccessory = true
 
         if #available(iOS 14.0, *) {
+            calendarRow.menuProvider = { [weak self] in
+                self?.makeCalendarMenu() ?? UIMenu(title: "", children: [])
+            }
+        } else {
+            calendarRow.menuProvider = nil
+        }
+        calendarRow.addTarget(self, action: #selector(calendarRowTapped), for: .touchUpInside)
+        calendarRow.showsAccessory = true
+
+        if #available(iOS 14.0, *) {
             recurrenceRow.menuProvider = { [weak self] in
                 self?.makeRecurrenceMenu() ?? UIMenu(title: "", children: [])
             }
@@ -463,6 +483,7 @@ final class AddEventViewController: UIViewController {
         let repeatGroupContainer = addFormRow(repeatGroupStack, horizontalInset: 0)
         repeatGroupContainer.layer.zPosition = -999
         addFormRow(reminderRow, horizontalInset: 0)
+        addFormRow(calendarRow, horizontalInset: 0)
 
         addFormRow(locationRow)
         addFormRow(urlRow)
@@ -487,6 +508,10 @@ final class AddEventViewController: UIViewController {
         recurrenceRow.alpha = 0
 
         reminderRow.snp.makeConstraints { make in
+            make.height.equalTo(formRowHeight)
+        }
+
+        calendarRow.snp.makeConstraints { make in
             make.height.equalTo(formRowHeight)
         }
 
@@ -609,6 +634,11 @@ final class AddEventViewController: UIViewController {
             }
         }
 
+        guard let activeCalendar = selectedCalendar else {
+            showAlert(message: "请选择要保存的日历")
+            return
+        }
+
         let locationText = selectedLocation?.combinedDescription ?? ""
         let urlText = urlRow.textField.text?.trimmingCharacters(in: .whitespacesAndNewlines)
         let descriptionText = notesRow.textView.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -620,15 +650,15 @@ final class AddEventViewController: UIViewController {
             endDate: endDate,
             isAllDay: isAllDay,
             location: locationText,
-            calendarId: "local",
+            calendarId: activeCalendar.id,
             description: descriptionText.isEmpty ? nil : descriptionText,
-            customColor: UIColor.systemBlue,
+            customColor: activeCalendar.color ?? UIColor.systemBlue,
             recurrenceRule: resolvedRepeatRule?.toRRule(startDate: startDate),
             repeatConfiguration: resolvedRepeatRule,
             reminders: reminders,
             url: urlText?.isEmpty == false ? urlText : nil,
-            calendarName: "本地日历",
-            isFromDeviceCalendar: false,
+            calendarName: activeCalendar.title,
+            isFromDeviceCalendar: true,
             deviceEventId: nil
         )
 
@@ -743,6 +773,17 @@ final class AddEventViewController: UIViewController {
         }
     }
 
+    @objc private func calendarRowTapped() {
+        view.endEditing(true)
+        dismissPickers()
+
+        if #available(iOS 14.0, *) {
+            calendarRow.showMenu()
+        } else {
+            presentLegacyCalendarSheet()
+        }
+    }
+
     @available(iOS 14.0, *)
     private func makeRecurrenceMenu() -> UIMenu {
         let options: [(String, RecurrenceEndMode)] = [
@@ -808,6 +849,38 @@ final class AddEventViewController: UIViewController {
         return UIMenu(title: "", children: actions + [customAction])
     }
 
+    @available(iOS 14.0, *)
+    private func makeCalendarMenu() -> UIMenu? {
+        var elements: [UIMenuElement] = []
+
+        if availableCalendars.isEmpty {
+            let title = isLoadingCalendars ? "正在加载…" : "暂无可用日历"
+            let placeholder = UIAction(title: title) { _ in }
+            placeholder.attributes = [.disabled]
+            elements.append(placeholder)
+        } else {
+            availableCalendars.forEach { summary in
+                let action = UIAction(title: calendarDisplayTitle(for: summary), image: calendarColorImage(for: summary)) { [weak self] _ in
+                    self?.applyCalendarSelection(summary)
+                }
+                if #available(iOS 15.0, *) {
+                    action.state = summary.id == selectedCalendar?.id ? .on : .off
+                }
+                if !summary.allowsContentModifications {
+                    action.attributes.insert(.disabled)
+                }
+                elements.append(action)
+            }
+        }
+
+        let addAction = UIAction(title: "添加日历", image: UIImage(systemName: "plus")) { [weak self] _ in
+            self?.presentAddCalendarPrompt()
+        }
+        elements.append(addAction)
+
+        return UIMenu(title: "", children: elements)
+    }
+
     private func presentLegacyReminderSheet() {
         let alert = UIAlertController(title: "提醒", message: nil, preferredStyle: .actionSheet)
         let selectedIds = Set(selectedReminders.map { $0.id })
@@ -829,6 +902,41 @@ final class AddEventViewController: UIViewController {
         if let popover = alert.popoverPresentationController {
             popover.sourceView = reminderRow
             popover.sourceRect = reminderRow.bounds
+        }
+
+        present(alert, animated: true)
+    }
+
+    private func presentLegacyCalendarSheet() {
+        let alert = UIAlertController(title: "选择日历", message: nil, preferredStyle: .actionSheet)
+
+        if availableCalendars.isEmpty {
+            let title = isLoadingCalendars ? "正在加载…" : "暂无可用日历"
+            let placeholder = UIAlertAction(title: title, style: .default)
+            placeholder.isEnabled = false
+            alert.addAction(placeholder)
+        } else {
+            availableCalendars.forEach { summary in
+                var title = calendarDisplayTitle(for: summary)
+                if summary.id == selectedCalendar?.id {
+                    title = "✓ " + title
+                }
+                let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
+                    self?.applyCalendarSelection(summary)
+                }
+                action.isEnabled = summary.allowsContentModifications
+                alert.addAction(action)
+            }
+        }
+
+        alert.addAction(UIAlertAction(title: "添加日历", style: .default) { [weak self] _ in
+            self?.presentAddCalendarPrompt()
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = calendarRow
+            popover.sourceRect = calendarRow.bounds
         }
 
         present(alert, animated: true)
@@ -1202,6 +1310,185 @@ final class AddEventViewController: UIViewController {
         }
         let idSet = Set(uniqueIds)
         return reminderOptions.filter { idSet.contains($0.id) }
+    }
+
+    // MARK: - Calendar Selection
+
+    private func loadCalendarOptions() {
+        isLoadingCalendars = true
+        calendarLoadErrorMessage = nil
+        updateCalendarRowDisplay()
+        Task { [weak self] in
+            guard let self else { return }
+            let granted = await self.calendarService.requestDevicePermission()
+            guard granted else {
+                await MainActor.run {
+                    self.isLoadingCalendars = false
+                    self.availableCalendars = []
+                    self.selectedCalendar = nil
+                    self.calendarLoadErrorMessage = "请在设置中允许访问日历"
+                    self.calendarRow.isUserInteractionEnabled = false
+                    self.calendarRow.refreshMenu()
+                    self.updateCalendarRowDisplay()
+                }
+                return
+            }
+
+            await self.calendarService.refreshCalendars()
+            let calendars = await self.calendarService.availableDeviceCalendars()
+            await MainActor.run {
+                self.isLoadingCalendars = false
+                self.calendarLoadErrorMessage = nil
+                self.calendarRow.isUserInteractionEnabled = true
+                self.applyCalendars(calendars)
+            }
+        }
+    }
+
+    private func applyCalendars(_ calendars: [EKCalendarSummary]) {
+        let sorted = calendars.sorted { lhs, rhs in
+            lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+        }
+        availableCalendars = sorted
+        restoreLastCalendarSelection()
+        updateCalendarRowDisplay()
+        calendarRow.refreshMenu()
+    }
+
+    private func restoreLastCalendarSelection() {
+        guard !availableCalendars.isEmpty else {
+            selectedCalendar = nil
+            return
+        }
+
+        let writable = availableCalendars.filter { $0.allowsContentModifications }
+        if let savedId = UserDefaults.standard.string(forKey: lastCalendarSelectionKey),
+           let saved = writable.first(where: { $0.id == savedId }) {
+            selectedCalendar = saved
+            return
+        }
+
+        if let current = selectedCalendar,
+           availableCalendars.contains(where: { $0.id == current.id }) {
+            if current.allowsContentModifications {
+                return
+            }
+        }
+
+        if let fallback = writable.first {
+            selectedCalendar = fallback
+            persistSelectedCalendar()
+        } else {
+            selectedCalendar = nil
+            persistSelectedCalendar()
+        }
+    }
+
+    private func applyCalendarSelection(_ summary: EKCalendarSummary) {
+        guard summary.allowsContentModifications else { return }
+        selectedCalendar = summary
+        calendarLoadErrorMessage = nil
+        persistSelectedCalendar()
+        updateCalendarRowDisplay()
+        calendarRow.refreshMenu()
+    }
+
+    private func persistSelectedCalendar() {
+        if let id = selectedCalendar?.id {
+            UserDefaults.standard.set(id, forKey: lastCalendarSelectionKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: lastCalendarSelectionKey)
+        }
+    }
+
+    private func updateCalendarRowDisplay() {
+        calendarRow.accentColor = nil
+        if let error = calendarLoadErrorMessage {
+            calendarRow.value = error
+            return
+        }
+        if isLoadingCalendars {
+            calendarRow.value = "正在加载…"
+            return
+        }
+        if let selectedCalendar {
+            calendarRow.value = selectedCalendar.title
+            calendarRow.accentColor = selectedCalendar.color
+            return
+        }
+
+        if availableCalendars.isEmpty {
+            calendarRow.value = "暂无可用日历"
+        } else if !availableCalendars.contains(where: { $0.allowsContentModifications }) {
+            calendarRow.value = "没有可写的日历"
+        } else {
+            calendarRow.value = "选择日历"
+        }
+    }
+
+    private func calendarDisplayTitle(for summary: EKCalendarSummary) -> String {
+        summary.allowsContentModifications ? summary.title : "\(summary.title)（只读）"
+    }
+
+    private func calendarColorImage(for summary: EKCalendarSummary) -> UIImage? {
+        guard let color = summary.color else { return nil }
+        let diameter: CGFloat = 14
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: diameter, height: diameter))
+        let image = renderer.image { context in
+            let rect = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+            context.cgContext.setFillColor(color.cgColor)
+            context.cgContext.fillEllipse(in: rect)
+
+//            let strokeColor = UIColor.separator.withAlphaComponent(0.5)
+//            context.cgContext.setStrokeColor(strokeColor.cgColor)
+//            context.cgContext.setLineWidth(1)
+//            context.cgContext.strokeEllipse(in: rect.insetBy(dx: 0.5, dy: 0.5))
+        }
+        return image.withRenderingMode(.alwaysOriginal)
+    }
+
+    private func presentAddCalendarPrompt() {
+        let alert = UIAlertController(title: "添加日历", message: "请输入日历名称", preferredStyle: .alert)
+        alert.addTextField { textField in
+            textField.placeholder = "例如：工作"
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "创建", style: .default) { [weak self] _ in
+            guard let text = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return }
+            self?.createCalendar(named: text)
+        })
+        present(alert, animated: true)
+    }
+
+    private func createCalendar(named name: String) {
+        isLoadingCalendars = true
+        calendarLoadErrorMessage = nil
+        updateCalendarRowDisplay()
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let created = try await self.calendarService.createCalendar(title: name)
+                await self.calendarService.refreshCalendars()
+                let calendars = await self.calendarService.availableDeviceCalendars()
+                await MainActor.run {
+                    self.isLoadingCalendars = false
+                    self.calendarLoadErrorMessage = nil
+                    self.applyCalendars(calendars)
+                    if let match = self.availableCalendars.first(where: { $0.id == created.id }) {
+                        self.selectedCalendar = match
+                        self.persistSelectedCalendar()
+                        self.updateCalendarRowDisplay()
+                        self.calendarRow.refreshMenu()
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.isLoadingCalendars = false
+                    self.updateCalendarRowDisplay()
+                    self.showAlert(message: "创建日历失败：\(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     private func updateRecurrenceAvailability(animated: Bool = false) {
@@ -2126,6 +2413,185 @@ private final class OptionRowView: UIControl {
         sendActions(for: .touchCancel)
     }
 
+}
+
+private final class CalendarOptionRowView: UIControl {
+    private let iconView = UIImageView()
+    private let colorDotView = UIView()
+    private let valueLabel = UILabel()
+    private let accessoryImageView = UIImageView()
+    private let menuButton: UIButton
+    private var storedMenuProvider: (() -> UIMenu)?
+    private var colorDotWidthConstraint: Constraint?
+
+    var value: String {
+        get { valueLabel.text ?? "" }
+        set { valueLabel.text = newValue }
+    }
+
+    var accentColor: UIColor? {
+        didSet { updateColorDot() }
+    }
+
+    var showsAccessory: Bool = false {
+        didSet { accessoryImageView.isHidden = !showsAccessory }
+    }
+
+    var menuProvider: (() -> UIMenu)? {
+        didSet {
+            storedMenuProvider = menuProvider
+            configureMenu()
+        }
+    }
+
+    init(iconName: String, placeholder: String) {
+        if #available(iOS 14.0, *) {
+            menuButton = MenuAnchorButton(type: .system)
+        } else {
+            menuButton = UIButton(type: .system)
+        }
+        super.init(frame: .zero)
+        backgroundColor = UIColor.systemBackground
+        isOpaque = true
+        layoutMargins = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
+
+        iconView.image = UIImage(systemName: iconName)
+        iconView.tintColor = .secondaryLabel
+
+        colorDotView.layer.cornerRadius = 5
+        colorDotView.layer.masksToBounds = true
+
+        valueLabel.text = placeholder
+        valueLabel.font = UIFont.systemFont(ofSize: 16)
+        valueLabel.textColor = UIColor.label
+
+        accessoryImageView.image = UIImage(systemName: "chevron.up.chevron.down")
+        accessoryImageView.tintColor = .gray
+        accessoryImageView.isHidden = true
+        accessoryImageView.contentMode = .scaleAspectFit
+        accessoryImageView.isUserInteractionEnabled = false
+
+        addSubview(iconView)
+        addSubview(colorDotView)
+        addSubview(valueLabel)
+        addSubview(accessoryImageView)
+
+        iconView.snp.makeConstraints { make in
+            make.leading.equalTo(layoutMarginsGuide.snp.leading)
+            make.centerY.equalToSuperview()
+            make.width.height.equalTo(iconSize)
+        }
+
+        colorDotView.snp.makeConstraints { make in
+            make.leading.equalTo(iconView.snp.trailing).offset(12)
+            make.centerY.equalToSuperview()
+            colorDotWidthConstraint = make.width.equalTo(10).constraint
+            make.height.equalTo(10)
+        }
+
+        accessoryImageView.snp.makeConstraints { make in
+            make.trailing.equalTo(layoutMarginsGuide.snp.trailing)
+            make.centerY.equalToSuperview()
+            make.width.equalTo(21)
+            make.height.equalTo(21)
+        }
+
+        valueLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        valueLabel.snp.makeConstraints { make in
+            make.leading.equalTo(colorDotView.snp.trailing).offset(6)
+            make.trailing.lessThanOrEqualTo(accessoryImageView.snp.leading).offset(-16)
+            make.centerY.equalToSuperview()
+        }
+
+        menuButton.setTitle(nil, for: .normal)
+        menuButton.tintColor = .clear
+        menuButton.backgroundColor = .clear
+        menuButton.isHidden = true
+        menuButton.isUserInteractionEnabled = true
+        addSubview(menuButton)
+        menuButton.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+
+        if #available(iOS 14.0, *), let anchorButton = menuButton as? MenuAnchorButton {
+            anchorButton.anchorPointProvider = { [weak self] in
+                guard let self else { return CGPoint.zero }
+                let localCenter = CGPoint(x: self.accessoryImageView.bounds.midX, y: self.accessoryImageView.bounds.midY)
+                return self.accessoryImageView.convert(localCenter, to: anchorButton)
+            }
+        }
+
+        menuButton.addTarget(self, action: #selector(forwardTouchDown), for: .touchDown)
+        menuButton.addTarget(self, action: #selector(forwardTouchUpInside), for: .touchUpInside)
+        menuButton.addTarget(self, action: #selector(forwardTouchCancel), for: [.touchCancel, .touchDragExit, .touchUpOutside])
+
+        updateColorDot()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var isHighlighted: Bool {
+        didSet { backgroundColor = isHighlighted ? UIColor.systemGray5 : UIColor.clear }
+    }
+
+    func showMenu() {
+        guard #available(iOS 14.0, *) else { return }
+        configureMenu()
+        menuButton.sendActions(for: .touchDown)
+        menuButton.sendActions(for: .touchUpInside)
+    }
+
+    func refreshMenu() {
+        configureMenu()
+    }
+
+    private func configureMenu() {
+        guard let provider = storedMenuProvider else {
+            menuButton.menu = nil
+            menuButton.isHidden = true
+            return
+        }
+
+        guard #available(iOS 14.0, *) else {
+            menuButton.menu = nil
+            menuButton.isHidden = true
+            return
+        }
+
+        menuButton.isHidden = false
+        menuButton.menu = provider()
+        menuButton.showsMenuAsPrimaryAction = true
+    }
+
+    private func updateColorDot() {
+        if let color = accentColor {
+            colorDotView.backgroundColor = color
+            colorDotView.isHidden = false
+            colorDotWidthConstraint?.update(offset: 10)
+        } else {
+            colorDotView.backgroundColor = UIColor.clear
+            colorDotWidthConstraint?.update(offset: 0)
+            colorDotView.isHidden = true
+        }
+        setNeedsLayout()
+    }
+
+    @objc private func forwardTouchDown() {
+        isHighlighted = true
+        sendActions(for: .touchDown)
+    }
+
+    @objc private func forwardTouchUpInside() {
+        isHighlighted = false
+        sendActions(for: .touchUpInside)
+    }
+
+    @objc private func forwardTouchCancel() {
+        isHighlighted = false
+        sendActions(for: .touchCancel)
+    }
 }
 
 private final class FormScrollView: UIScrollView {

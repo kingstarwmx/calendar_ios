@@ -93,13 +93,12 @@ final class DeviceCalendarService {
             throw NSError(domain: "DeviceCalendarService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Calendar permission not granted"])
         }
 
-        // 先获取或创建应用日历
-        let appCalendar = try await getOrCreateAppCalendar()
+        let targetCalendar = try await resolvedCalendar(for: event)
 
         return try await withCheckedThrowingContinuation { continuation in
             calendarQueue.async {
                 let ekEvent = EKEvent(eventStore: self.eventStore)
-                ekEvent.calendar = appCalendar
+                ekEvent.calendar = targetCalendar
                 ekEvent.title = event.title
                 ekEvent.startDate = event.startDate
                 ekEvent.endDate = event.endDate
@@ -135,8 +134,11 @@ final class DeviceCalendarService {
             return try await createEvent(event)
         }
 
+        let targetCalendar = try await resolvedCalendar(for: event)
+
         return try await withCheckedThrowingContinuation { continuation in
             calendarQueue.async {
+                ekEvent.calendar = targetCalendar
                 ekEvent.title = event.title
                 ekEvent.startDate = event.startDate
                 ekEvent.endDate = event.endDate
@@ -188,6 +190,7 @@ final class DeviceCalendarService {
         }
         // 获取所有日历，包括只读的订阅日历（如节假日日历）
         availableCalendars = eventStore.calendars(for: .event)
+        print("")
     }
 
     /// 获取可编辑的日历（用于创建新事件）
@@ -230,13 +233,8 @@ final class DeviceCalendarService {
         newCalendar.title = appCalendarTitle
         newCalendar.cgColor = UIColor.systemBlue.cgColor
 
-        // 设置日历源（优先使用 iCloud，其次本地）
-        if let iCloudSource = eventStore.sources.first(where: { $0.sourceType == .calDAV || $0.title.lowercased().contains("icloud") }) {
-            newCalendar.source = iCloudSource
-        } else if let localSource = eventStore.sources.first(where: { $0.sourceType == .local }) {
-            newCalendar.source = localSource
-        } else {
-            newCalendar.source = eventStore.defaultCalendarForNewEvents?.source ?? eventStore.sources.first!
+        if let source = preferredSource() {
+            newCalendar.source = source
         }
 
         // 保存日历
@@ -246,6 +244,34 @@ final class DeviceCalendarService {
         UserDefaults.standard.set(newCalendar.calendarIdentifier, forKey: appCalendarIdentifierKey)
 
         return newCalendar
+    }
+
+    func createCalendar(title: String, color: UIColor? = nil) async throws -> EKCalendar {
+        guard permissionStatus == .authorized else {
+            throw NSError(domain: "DeviceCalendarService", code: 2, userInfo: [NSLocalizedDescriptionKey: "Calendar permission not granted"])
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            calendarQueue.async {
+                let calendar = EKCalendar(for: .event, eventStore: self.eventStore)
+                calendar.title = title
+                if let color = color?.cgColor {
+                    calendar.cgColor = color
+                }
+                if let source = self.preferredSource() {
+                    calendar.source = source
+                }
+
+                do {
+                    try self.eventStore.saveCalendar(calendar, commit: true)
+                    self.eventStore.refreshSourcesIfNecessary()
+                    Task { await self.refreshCalendars() }
+                    continuation.resume(returning: calendar)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 
     /// 调试：打印所有日历信息
@@ -311,5 +337,32 @@ final class DeviceCalendarService {
         } else {
             ekEvent.recurrenceRules = nil
         }
+    }
+
+    private func resolvedCalendar(for event: Event) async throws -> EKCalendar {
+        eventStore.refreshSourcesIfNecessary()
+        if let calendar = eventStore.calendar(withIdentifier: event.calendarId), calendar.allowsContentModifications {
+            return calendar
+        }
+
+        if let defaultCalendar = eventStore.defaultCalendarForNewEvents,
+           defaultCalendar.allowsContentModifications {
+            return defaultCalendar
+        }
+
+        return try await getOrCreateAppCalendar()
+    }
+
+    private func preferredSource() -> EKSource? {
+        if let iCloudSource = eventStore.sources.first(where: { $0.sourceType == .calDAV || $0.title.lowercased().contains("icloud") }) {
+            return iCloudSource
+        }
+        if let localSource = eventStore.sources.first(where: { $0.sourceType == .local }) {
+            return localSource
+        }
+        if let defaultSource = eventStore.defaultCalendarForNewEvents?.source {
+            return defaultSource
+        }
+        return eventStore.sources.first
     }
 }

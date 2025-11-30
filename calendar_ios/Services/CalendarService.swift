@@ -25,7 +25,7 @@ actor CalendarService {
     }
 
     func availableDeviceCalendars() -> [EKCalendarSummary] {
-        deviceService.availableCalendars.map { EKCalendarSummary(calendar: $0) }
+        deviceService.editableCalendars.map { EKCalendarSummary(calendar: $0) }
     }
 
     func devicePermissionStatus() -> DeviceCalendarService.PermissionStatus {
@@ -81,6 +81,11 @@ actor CalendarService {
         try await deviceService.deleteEvent(eventId: id)
     }
 
+    func createCalendar(title: String, color: UIColor? = nil) async throws -> EKCalendarSummary {
+        let calendar = try await deviceService.createCalendar(title: title, color: color)
+        return EKCalendarSummary(calendar: calendar)
+    }
+
     /// 打印所有日历信息（调试用）
     func printAllCalendars() async {
         await deviceService.printAllCalendars()
@@ -108,10 +113,12 @@ struct EKCalendarSummary: Identifiable {
     let id: String
     let title: String
     let color: UIColor?
+    let allowsContentModifications: Bool
 
     init(calendar: EKCalendar) {
         id = calendar.calendarIdentifier
         title = calendar.title
+        allowsContentModifications = calendar.allowsContentModifications
         if let cgColor = calendar.cgColor {
             color = UIColor(cgColor: cgColor)
         } else {
