@@ -12,7 +12,7 @@ final class EventViewModel: ObservableObject {
     @Published private(set) var deviceCalendarEnabled: Bool = false
     @Published private(set) var availableCalendars: [EKCalendarSummary] = []
 
-    private let calendarService: CalendarService
+    let calendarService: CalendarService
 
     init(calendarService: CalendarService = CalendarService()) {
         self.calendarService = calendarService

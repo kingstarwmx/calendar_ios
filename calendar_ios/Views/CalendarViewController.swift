@@ -798,7 +798,7 @@ final class CalendarViewController: UIViewController {
     }
 
     private func presentAddEventController() {
-        let controller = AddEventViewController()
+        let controller = AddEventViewController(calendarService: viewModel.calendarService)
         controller.creationDate = viewModel.selectedDate
         controller.onSave = { [weak self] event in
             guard let self else { return }

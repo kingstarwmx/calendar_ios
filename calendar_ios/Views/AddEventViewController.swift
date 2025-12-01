@@ -7,6 +7,7 @@ final class AddEventViewController: UIViewController {
     var onSave: ((Event) -> Void)?
     var creationDate: Date = Date() {
         didSet {
+            alignDatesWithCreationDate()
             guard isViewLoaded else { return }
             recurrenceSelectedDate = creationDate
             configureRecurrenceCalendar()
@@ -118,7 +119,7 @@ final class AddEventViewController: UIViewController {
     private var isLoadingCalendars = false
     private var calendarLoadErrorMessage: String?
     private let lastCalendarSelectionKey = "AddEventViewController.lastCalendarIdentifier"
-    private let calendarService = CalendarService()
+    private let calendarService: CalendarService
     private var calendarSelection: UICalendarSelectionSingleDate?
     private var selectedLocation: LocationSelection?
     private var keyboardVisibleInset: CGFloat = 0
@@ -193,6 +194,15 @@ final class AddEventViewController: UIViewController {
     }()
 
     // MARK: - Lifecycle
+
+    init(calendarService: CalendarService = CalendarService()) {
+        self.calendarService = calendarService
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -1253,6 +1263,24 @@ final class AddEventViewController: UIViewController {
         endDateButton.update(date: endDateText, time: endTimeText)
         startDateButton.showsTime = !isAllDay
         endDateButton.showsTime = !isAllDay
+    }
+
+    private func alignDatesWithCreationDate() {
+        let calendar = Calendar.current
+        let duration = max(endDate.timeIntervalSince(startDate), 60 * 60)
+        var dateComponents = calendar.dateComponents([.year, .month, .day], from: creationDate)
+        let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: startDate)
+        dateComponents.hour = timeComponents.hour
+        dateComponents.minute = timeComponents.minute
+        dateComponents.second = timeComponents.second
+        guard let combined = calendar.date(from: dateComponents) else { return }
+        startDate = combined
+        endDate = combined.addingTimeInterval(duration)
+        if isViewLoaded {
+            startDatePicker.date = startDate
+            endDatePicker.date = endDate
+            updateDateDisplays()
+        }
     }
 
     private func formattedDateString(from date: Date) -> String {
