@@ -21,6 +21,8 @@ final class CalendarViewController: UIViewController {
 
     /// 三个月份页面视图（复用）
     private var monthPageViews: [MonthPageView] = []
+    /// 当前滚动中最接近中心的页面索引
+    private var currentVisiblePageIndex: Int = 1
 
     /// 当前月视图中心页对应的月份（取月初）
     private var currentMonthAnchor: Date = Date()
@@ -196,6 +198,7 @@ final class CalendarViewController: UIViewController {
 
         // 初始显示中间页（当前月）
         monthScrollView.contentOffset = CGPoint(x: screenWidth, y: 0)
+        currentVisiblePageIndex = 1
 
         // 不立即更新数据，等待数据加载完成
     }
@@ -1029,6 +1032,20 @@ extension CalendarViewController: UIGestureRecognizerDelegate {
 
 // MARK: - UIScrollViewDelegate
 extension CalendarViewController: UIScrollViewDelegate {
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard scrollView == monthScrollView, !isResettingScrollView else { return }
+        let width = scrollView.bounds.width
+        guard width > 0 else { return }
+        let progress = scrollView.contentOffset.x / width
+        let nearestIndex = Int(round(progress))
+        let clampedIndex = max(0, min(monthPageViews.count - 1, nearestIndex))
+        guard clampedIndex != currentVisiblePageIndex else { return }
+        currentVisiblePageIndex = clampedIndex
+        if let month = monthPageViews[safe: clampedIndex]?.viewModel?.month {
+            updateMonthLabel(for: month)
+        }
+    }
+
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         guard scrollView == monthScrollView, !isResettingScrollView else { return }
         handleScrollCompletion(for: scrollView)
@@ -1096,6 +1113,7 @@ extension CalendarViewController: UIScrollViewDelegate {
 
         // 重置 contentOffset 到中间位置（不带动画）
         monthScrollView.setContentOffset(CGPoint(x: screenWidth, y: 0), animated: false)
+        currentVisiblePageIndex = 1
 
         // 计算五个月的日期范围并加载数据（当前月份的前后各两个月）
         if unifiedCalendarScope == .week {

@@ -193,6 +193,11 @@ final class MonthPageViewModel: ObservableObject {
         let displayEndDate = calendar.date(byAdding: .day, value: 41, to: displayStartDate) ?? lastDayOfMonth
         return displayStartDate...displayEndDate
     }
+    
+    /// 对外暴露当前月份，方便其它模块读取
+    var month: Date {
+        currentMonth
+    }
 
     // MARK: - Initialization
 
