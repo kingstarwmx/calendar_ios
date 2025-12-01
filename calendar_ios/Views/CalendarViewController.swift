@@ -309,25 +309,24 @@ final class CalendarViewController: UIViewController {
                 newViewModel.configure(month: representativeMonth, events: events)
                 newViewModel.selectDate(selectedDateForPage)
                 
-                newPageView.calendarView.scope = .week
-                if let currentSelected = newPageView.calendarView.selectedDate {
-                    if !calendar.isDate(currentSelected, inSameDayAs: selectedDateForPage) {
-                        
-                    }
-                    newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
-                } else {
-                    newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
-                }
                 
-                if !calendar.isDate(newPageView.calendarView.currentPage, inSameDayAs: weekStartDay) {
-                    newPageView.calendarView.setCurrentPage(weekStartDay, animated: false)
-                }
-                newPageView.calendarView.setNeedsLayout()
-                newPageView.calendarView.layoutIfNeeded()
             }
             
             let newPageView = monthPageViews[index]
+            newPageView.calendarView.scope = .week
+            if let currentSelected = newPageView.calendarView.selectedDate {
+                if !calendar.isDate(currentSelected, inSameDayAs: selectedDateForPage) {
+                    newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
+                }
+            } else {
+                newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
+            }
             
+            if !calendar.isDate(newPageView.calendarView.currentPage, inSameDayAs: weekStartDay) {
+                newPageView.calendarView.setCurrentPage(weekStartDay, animated: false)
+            }
+            newPageView.calendarView.setNeedsLayout()
+            newPageView.calendarView.layoutIfNeeded()
         }
 
         updateMonthLabel(for: viewModel.selectedDate)
@@ -666,6 +665,25 @@ final class CalendarViewController: UIViewController {
         let key = getWeekKey(for: weekStart)
         selectedDatesPerWeek[key] = date
     }
+    
+    /// 仅刷新当前可见页面中的事件数据，不改变日历结构
+    private func refreshVisiblePagesEvents() {
+        guard !monthPageViews.isEmpty else { return }
+        for pageView in monthPageViews {
+            guard let viewModel = pageView.viewModel else { continue }
+            let events = filteredEvents(for: viewModel.actualDisplayRange)
+            viewModel.configure(month: viewModel.currentMonth, events: events)
+        }
+    }
+    
+    private func filteredEvents(for range: ClosedRange<Date>) -> [Event] {
+        let calendar = Calendar.current
+        return viewModel.events.filter { event in
+            let eventStart = calendar.startOfDay(for: event.startDate)
+            let eventEnd = calendar.startOfDay(for: event.endDate)
+            return eventEnd >= range.lowerBound && eventStart <= range.upperBound
+        }
+    }
 
     /// 获取月份的 key（格式：yyyy-MM）
     /// - Parameter date: 日期
@@ -687,15 +705,7 @@ final class CalendarViewController: UIViewController {
         viewModel.$events
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                guard let self = self else { return }
-                // 刷新所有月份页面的数据
-                if self.unifiedCalendarScope == .week {
-                    self.updateWeekPagesData(.up)
-                }else {
-                    self.updateMonthPagesData(.all)
-                }
-                
-                // print("🔄 日历数据已刷新")
+                self?.refreshVisiblePagesEvents()
             }
             .store(in: &cancellables)
 
