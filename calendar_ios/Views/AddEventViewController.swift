@@ -60,6 +60,7 @@ final class AddEventViewController: UIViewController {
     private let formStack = UIStackView()
 
     private let titleField = UITextField()
+    private let colorIndicatorView = UIView()
 
     private let timeSection = UIView()
     private let timeRow = UIStackView()
@@ -289,9 +290,23 @@ final class AddEventViewController: UIViewController {
         let titleContainer = UIView()
         titleContainer.backgroundColor = .white
         titleContainer.isOpaque = true
+        titleContainer.addSubview(colorIndicatorView)
         titleContainer.addSubview(titleField)
+
+        colorIndicatorView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.8)
+        colorIndicatorView.layer.cornerRadius = 2
+        colorIndicatorView.layer.masksToBounds = true
+        colorIndicatorView.snp.makeConstraints { make in
+            make.leading.equalToSuperview().offset(20)
+            make.width.equalTo(4)
+            make.top.equalToSuperview().offset(6)
+            make.bottom.equalToSuperview().offset(-6)
+        }
+
         titleField.snp.makeConstraints { make in
-            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20))
+            make.leading.equalTo(colorIndicatorView.snp.trailing).offset(12)
+            make.trailing.equalToSuperview().offset(-20)
+            make.top.bottom.equalToSuperview()
         }
 
         stackView.addArrangedSubview(titleContainer)
@@ -378,7 +393,8 @@ final class AddEventViewController: UIViewController {
         timeSection.addSubview(pickerStack)
         pickerStack.snp.makeConstraints { make in
             pickerStackTopConstraint = make.top.equalTo(timeRow.snp.bottom).constraint
-            make.leading.trailing.equalToSuperview()
+            make.leading.equalToSuperview().offset(12)
+            make.trailing.equalToSuperview().offset(-12)
             make.bottom.equalToSuperview()
         }
 
@@ -517,8 +533,8 @@ final class AddEventViewController: UIViewController {
 
         recurrenceCalendarRow.snp.makeConstraints { make in
             make.height.greaterThanOrEqualTo(320)
-            make.leading.equalToSuperview().offset(20)
-            make.trailing.equalToSuperview().offset(-20)
+            make.leading.equalToSuperview().offset(12)
+            make.trailing.equalToSuperview().offset(-12)
         }
 
         locationRow.snp.makeConstraints { make in
@@ -874,7 +890,7 @@ final class AddEventViewController: UIViewController {
         }
 
         let addAction = UIAction(title: "添加日历", image: UIImage(systemName: "plus")) { [weak self] _ in
-            self?.presentAddCalendarPrompt()
+            self?.presentAddCalendarController()
         }
         elements.append(addAction)
 
@@ -930,7 +946,7 @@ final class AddEventViewController: UIViewController {
         }
 
         alert.addAction(UIAlertAction(title: "添加日历", style: .default) { [weak self] _ in
-            self?.presentAddCalendarPrompt()
+            self?.presentAddCalendarController()
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
 
@@ -1403,6 +1419,7 @@ final class AddEventViewController: UIViewController {
 
     private func updateCalendarRowDisplay() {
         calendarRow.accentColor = nil
+        colorIndicatorView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.8)
         if let error = calendarLoadErrorMessage {
             calendarRow.value = error
             return
@@ -1414,6 +1431,7 @@ final class AddEventViewController: UIViewController {
         if let selectedCalendar {
             calendarRow.value = selectedCalendar.title
             calendarRow.accentColor = selectedCalendar.color
+            colorIndicatorView.backgroundColor = selectedCalendar.color ?? UIColor.systemBlue
             return
         }
 
@@ -1447,48 +1465,23 @@ final class AddEventViewController: UIViewController {
         return image.withRenderingMode(.alwaysOriginal)
     }
 
-    private func presentAddCalendarPrompt() {
-        let alert = UIAlertController(title: "添加日历", message: "请输入日历名称", preferredStyle: .alert)
-        alert.addTextField { textField in
-            textField.placeholder = "例如：工作"
-        }
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-        alert.addAction(UIAlertAction(title: "创建", style: .default) { [weak self] _ in
-            guard let text = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return }
-            self?.createCalendar(named: text)
-        })
-        present(alert, animated: true)
-    }
-
-    private func createCalendar(named name: String) {
-        isLoadingCalendars = true
-        calendarLoadErrorMessage = nil
-        updateCalendarRowDisplay()
-        Task { [weak self] in
+    private func presentAddCalendarController() {
+        let controller = AddCalendarViewController(calendarService: calendarService)
+        controller.onCalendarCreated = { [weak self] summary in
             guard let self else { return }
-            do {
-                let created = try await self.calendarService.createCalendar(title: name)
-                await self.calendarService.refreshCalendars()
-                let calendars = await self.calendarService.availableDeviceCalendars()
-                await MainActor.run {
-                    self.isLoadingCalendars = false
-                    self.calendarLoadErrorMessage = nil
-                    self.applyCalendars(calendars)
-                    if let match = self.availableCalendars.first(where: { $0.id == created.id }) {
-                        self.selectedCalendar = match
-                        self.persistSelectedCalendar()
-                        self.updateCalendarRowDisplay()
-                        self.calendarRow.refreshMenu()
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    self.isLoadingCalendars = false
-                    self.updateCalendarRowDisplay()
-                    self.showAlert(message: "创建日历失败：\(error.localizedDescription)")
-                }
+            var calendars = self.availableCalendars
+            if let index = calendars.firstIndex(where: { $0.id == summary.id }) {
+                calendars[index] = summary
+            } else {
+                calendars.append(summary)
             }
+            self.selectedCalendar = summary
+            self.persistSelectedCalendar()
+            self.applyCalendars(calendars)
+            self.updateCalendarRowDisplay()
+            self.calendarRow.refreshMenu()
         }
+        navigationController?.pushViewController(controller, animated: true)
     }
 
     private func updateRecurrenceAvailability(animated: Bool = false) {
@@ -1951,10 +1944,10 @@ private final class DateSelectionButton: UIControl {
         container.spacing = 4
         container.isUserInteractionEnabled = false
 
-        dateLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        dateLabel.font = UIFont.systemFont(ofSize: 16)
         dateLabel.textColor = UIColor.label
 
-        timeLabel.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
+        timeLabel.font = UIFont.systemFont(ofSize: 18, weight: .medium)
         timeLabel.textColor = UIColor.label
 
         addSubview(container)
