@@ -33,7 +33,7 @@ private final class EventSlotView: UIView {
     private let eventBar = UIView()
     private let textLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 10, weight: .regular)
+        label.font = UIFont.systemFont(ofSize: 10, weight: .medium)
         label.clipsToBounds = false
         label.isHidden = true
         return label
@@ -48,7 +48,7 @@ private final class EventSlotView: UIView {
 
     private let overflowLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 8, weight: .semibold)
+        label.font = UIFont.systemFont(ofSize: 8, weight: .medium)
         label.textAlignment = .center
         label.textColor = .label
         return label

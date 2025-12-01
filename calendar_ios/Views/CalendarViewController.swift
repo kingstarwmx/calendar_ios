@@ -308,22 +308,26 @@ final class CalendarViewController: UIViewController {
                 newPageView.configure(with: newViewModel)
                 newViewModel.configure(month: representativeMonth, events: events)
                 newViewModel.selectDate(selectedDateForPage)
+                
+                newPageView.calendarView.scope = .week
+                if let currentSelected = newPageView.calendarView.selectedDate {
+                    if !calendar.isDate(currentSelected, inSameDayAs: selectedDateForPage) {
+                        
+                    }
+                    newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
+                } else {
+                    newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
+                }
+                
+                if !calendar.isDate(newPageView.calendarView.currentPage, inSameDayAs: weekStartDay) {
+                    newPageView.calendarView.setCurrentPage(weekStartDay, animated: false)
+                }
+                newPageView.calendarView.setNeedsLayout()
+                newPageView.calendarView.layoutIfNeeded()
             }
             
             let newPageView = monthPageViews[index]
-            if let currentSelected = newPageView.calendarView.selectedDate {
-                if !calendar.isDate(currentSelected, inSameDayAs: selectedDateForPage) {
-                    newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
-                }
-            } else {
-                newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
-            }
-            newPageView.calendarView.scope = .week
-            if !calendar.isDate(newPageView.calendarView.currentPage, inSameDayAs: weekStartDay) {
-                newPageView.calendarView.setCurrentPage(weekStartDay, animated: false)
-            }
-            newPageView.calendarView.setNeedsLayout()
-            newPageView.calendarView.layoutIfNeeded()
+            
         }
 
         updateMonthLabel(for: viewModel.selectedDate)
