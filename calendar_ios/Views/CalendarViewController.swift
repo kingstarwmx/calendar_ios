@@ -214,6 +214,43 @@ final class CalendarViewController: UIViewController {
         // tableView 的滑动手势需要等待 scope 手势失败
         pageView.tableView.panGestureRecognizer.require(toFail: panGesture)
     }
+
+    private func configurePageViewCallbacks(_ pageView: MonthPageView) {
+        pageView.onDateSelected = { [weak self] date in
+            self?.handleDateSelection(date)
+        }
+        pageView.onAdjacentMonthDateSelected = { [weak self] page, date, position in
+            self?.handleAdjacentMonthSelection(from: page, date: date, position: position)
+        }
+
+        pageView.onEventSelected = { [weak self] event in
+            self?.handleEventSelection(event)
+        }
+
+        pageView.onCalendarScopeChanged = { [weak self] page, scope in
+            self?.handleCalendarScopeChange(from: page, to: scope)
+        }
+
+        pageView.onCalendarHeightChanged = { [weak self] height in
+            self?.handleCalendarHeightChange(height)
+        }
+
+        setupPageViewGesture(for: pageView)
+    }
+    private func startOfWeek(for date: Date) -> Date {
+        let calendar = Calendar.current
+        let normalized = calendar.startOfDay(for: date)
+        let weekday = calendar.component(.weekday, from: normalized)
+        let firstWeekday = calendar.firstWeekday
+        var diff = weekday - firstWeekday
+        if diff < 0 { diff += 7 }
+        return calendar.date(byAdding: .day, value: -diff, to: normalized) ?? normalized
+    }
+
+    private func monthForWeek(startingAt weekStart: Date) -> Date {
+        // 使用周起始日所在月份
+        return weekStart.startOfMonth
+    }
     private func updateWeekPagesData(_ direction: Direction) {
         guard monthPageViews.count == 3 else { return }
 
@@ -330,42 +367,6 @@ final class CalendarViewController: UIViewController {
         }
 
         updateMonthLabel(for: viewModel.selectedDate)
-    }
-    private func configurePageViewCallbacks(_ pageView: MonthPageView) {
-        pageView.onDateSelected = { [weak self] date in
-            self?.handleDateSelection(date)
-        }
-        pageView.onAdjacentMonthDateSelected = { [weak self] page, date, position in
-            self?.handleAdjacentMonthSelection(from: page, date: date, position: position)
-        }
-
-        pageView.onEventSelected = { [weak self] event in
-            self?.handleEventSelection(event)
-        }
-
-        pageView.onCalendarScopeChanged = { [weak self] page, scope in
-            self?.handleCalendarScopeChange(from: page, to: scope)
-        }
-
-        pageView.onCalendarHeightChanged = { [weak self] height in
-            self?.handleCalendarHeightChange(height)
-        }
-
-        setupPageViewGesture(for: pageView)
-    }
-    private func startOfWeek(for date: Date) -> Date {
-        let calendar = Calendar.current
-        let normalized = calendar.startOfDay(for: date)
-        let weekday = calendar.component(.weekday, from: normalized)
-        let firstWeekday = calendar.firstWeekday
-        var diff = weekday - firstWeekday
-        if diff < 0 { diff += 7 }
-        return calendar.date(byAdding: .day, value: -diff, to: normalized) ?? normalized
-    }
-
-    private func monthForWeek(startingAt weekStart: Date) -> Date {
-        // 使用周起始日所在月份
-        return weekStart.startOfMonth
     }
 
     /// 更新三个月份页面的数据
