@@ -262,7 +262,7 @@ final class CalendarViewController: UIViewController {
         currentMonthAnchor = anchorDate.startOfMonth
         saveSelectedDateForWeek(anchorDate)
 
-        // 计算前一周、当前周、后一周的起始日
+        // 计算前一周、当前周、后一周的起始日23 30 7
         let weekStarts: [Date] = [
             calendar.date(byAdding: .weekOfYear, value: -1, to: anchorWeekStart) ?? anchorWeekStart,
             anchorWeekStart,
@@ -330,7 +330,10 @@ final class CalendarViewController: UIViewController {
                 if index == 0 {
                     shouldCreateNewPage = true
                 }
+            }else if direction == .all {
+                shouldCreateNewPage = true
             }
+            
             if shouldCreateNewPage {
                 let oldFrame = pageView.frame
                 pageView.removeFromSuperview()
@@ -351,17 +354,35 @@ final class CalendarViewController: UIViewController {
             
             let newPageView = monthPageViews[index]
             newPageView.calendarView.scope = .week
+            
             if let currentSelected = newPageView.calendarView.selectedDate {
                 if !calendar.isDate(currentSelected, inSameDayAs: selectedDateForPage) {
-                    newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
+                    
                 }
-            } else {
-                newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
             }
+            newPageView.calendarView.select(selectedDateForPage, scrollToDate: false)
             
             if !calendar.isDate(newPageView.calendarView.currentPage, inSameDayAs: weekStartDay) {
-                newPageView.calendarView.setCurrentPage(weekStartDay, animated: false)
+                
             }
+            
+            var targetPageDate = weekStartDay
+            // 由于周视图可能跨月，确保 currentPage 始终定位在代表月份内部
+            if !calendar.isDate(targetPageDate, equalTo: representativeMonth, toGranularity: .month) {
+                var candidateDate = targetPageDate
+                for _ in 0..<31 {
+                    guard let nextDay = calendar.date(byAdding: .day, value: 1, to: candidateDate) else { break }
+                    candidateDate = nextDay
+                    if calendar.isDate(candidateDate, equalTo: representativeMonth, toGranularity: .month) {
+                        targetPageDate = candidateDate
+                        break
+                    }
+                }
+            }
+            newPageView.calendarView.setCurrentPage(targetPageDate, animated: false)
+            print("representativeMonth: \(representativeMonth)")
+            print("selectedDateForPage: \(selectedDateForPage)")
+            print("setCurrentPage: \(targetPageDate)")
             newPageView.calendarView.setNeedsLayout()
             newPageView.calendarView.layoutIfNeeded()
         }
@@ -481,13 +502,16 @@ final class CalendarViewController: UIViewController {
         let normalizedDate = calendar.startOfDay(for: date)
 
         if unifiedCalendarScope == .week {
+            let previousMonth = currentMonthAnchor.startOfMonth
             currentWeekAnchor = startOfWeek(for: normalizedDate)
             currentMonthAnchor = normalizedDate.startOfMonth
             saveSelectedDate(normalizedDate)
             saveSelectedDateForWeek(normalizedDate)
-
             updateMonthLabel(for: normalizedDate)
             viewModel.selectedDate = normalizedDate
+            if !calendar.isDate(previousMonth, equalTo: currentMonthAnchor, toGranularity: .month) {
+                updateWeekPagesData(.all)
+            }
         } else {
             let month = normalizedDate.startOfMonth
             currentMonthAnchor = month
